@@ -30,6 +30,15 @@ FILE-CONTROL.
         alternate record key is fu_type WITH DUPLICATES
         file status is cr_futil.
         
+        select fhpl assign to "herbier_plante.dat"
+        organization indexed
+        access mode is dynamic
+        record key is fhpl_id
+        alternate record key is fhpl_lieu WITH DUPLICATES
+        alternate record key is fhpl_idHerbier WITH DUPLICATES
+        alternate record key is fhpl_idPlante WITH DUPLICATES
+        file status is cr_fhpl.
+        
         
 DATA DIVISION.
 FILE SECTION.
@@ -46,7 +55,6 @@ FD fher.
         01 tamp_fher.
                 02 fh_id PIC 9(3).
                 02 fh_nom PIC A(30).
-                02 pfh_nomLatin PIC A(45).
                 02 fh_utilisateur PIC A(30).
                 02 fh_date PIC A(15).
                 02 fh_type PIC A(20).
@@ -58,6 +66,15 @@ FD futil.
                 02 fu_mdp PIC 9(20).
                 02 fu_role PIC A(15).
                 02 fu_type PIC 9(15).
+                
+FD fhpl.
+        01 tamp_fhpl.
+                02 fhpl_id PIC 9(2).
+                02 fhpl_idHerbier PIC 9(3).
+                02 fhpl_idPlante PIC 9(3).
+                02 fhpl_date PIC A(15).
+                02 fhpl_taille PIC 9(5).
+                02 fhpl_lieu PIC A(40).
                
 
                
@@ -65,6 +82,7 @@ WORKING-STORAGE SECTION.
         77 cr_fplan PIC 9(2).
         77 cr_fher PIC 9(2).
         77 cr_futil PIC 9(2).
+        77 cr_fhpl PIC 9(2).
         
         
 PROCEDURE DIVISION.
@@ -86,6 +104,12 @@ IF cr_futil=35 THEN
         OPEN OUTPUT futil
 END-IF
 CLOSE futil
+
+OPEN I-O fhpl
+IF cr_fhpl=35 THEN
+        OPEN OUTPUT fhpl
+END-IF
+CLOSE fhpl
 
 
 STOP RUN.
