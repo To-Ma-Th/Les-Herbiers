@@ -63,9 +63,9 @@ FD futil.
         01 tamp_futil.
                 02 fu_id PIC 9(2).
                 02 fu_login PIC A(20).
-                02 fu_mdp PIC 9(20).
+                02 fu_mdp PIC A(20).
                 02 fu_role PIC A(15).
-                02 fu_type PIC 9(15).
+                02 fu_type PIC A(15).
                 
 FD fhpl.
         01 tamp_fhpl.
