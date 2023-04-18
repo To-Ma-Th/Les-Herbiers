@@ -83,6 +83,8 @@ WORKING-STORAGE SECTION.
         77 cr_fher PIC 9(2).
         77 cr_futil PIC 9(2).
         77 cr_fhpl PIC 9(2).
+        77 Wfin PIC 9.      
+        77 l_h_id PIC 9(3). 
         
         
 PROCEDURE DIVISION.
@@ -113,3 +115,37 @@ CLOSE fhpl
 
 
 STOP RUN.
+
+*> herbier
+
+
+       last_herbier_id.
+*> Compte le nombre d'herbier présents dans la fichier herbier
+*> et stocke le résultat dans l_h_id
+*>
+*> Variables utilisées :
+*> - l_h_id
+*> - Wfin
+       OPEN INPUT fher
+       MOVE 0 TO Wfin
+       MOVE 0 TO l_h_id
+       PERFORM WITH TEST AFTER UNTIL Wfin = 1
+           READ fher
+           AT END MOVE 1 TO Wfin
+           NOT AT END
+               ADD 1 TO l_h_id
+           END-READ
+       END-PERFORM
+       CLOSE fher.
+       
+       
+        add_herbier.
+*> Permet d'ajouter un herbier dans le fichier herbier
+*> 
+*> Variables utilisées :
+*> - l_h_id
+         PERFORM last_herbier_id
+         l_h_id = l_h_id + 1
+         MOVE l_h_id TO fh_id 
+        
+
