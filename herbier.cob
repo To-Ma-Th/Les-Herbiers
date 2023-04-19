@@ -61,11 +61,11 @@ FD fher.
               
 FD futil.
         01 tamp_futil.
-                02 fu_id PIC 9(2).
+                02 fu_id PIC 9(3).
                 02 fu_login PIC A(20).
-                02 fu_mdp PIC 9(20).
+                02 fu_mdp PIC A(20).
                 02 fu_role PIC A(15).
-                02 fu_type PIC 9(15).
+                02 fu_type PIC A(15).
                 
 FD fhpl.
         01 tamp_fhpl.
@@ -83,8 +83,9 @@ WORKING-STORAGE SECTION.
         77 cr_fher PIC 9(2).
         77 cr_futil PIC 9(2).
         77 cr_fhpl PIC 9(2).
-        77 Wfin PIC 9.      
-        77 l_h_id PIC 9(3). 
+        77 l_h_id PIC 9(3).
+        77 wEndOfFile PIC 9(1).
+        77 wUtilisateursCount PIC 9(3).
         
         
 PROCEDURE DIVISION.
@@ -113,6 +114,8 @@ IF cr_fhpl=35 THEN
 END-IF
 CLOSE fhpl
 
+*> Insertion automatique d'un untilisateur s'il n'y en a pas déjà
+PERFORM add_default_user_if_first_start.
 
 STOP RUN.
 
@@ -125,13 +128,13 @@ STOP RUN.
 *>
 *> Variables utilisées :
 *> - l_h_id
-*> - Wfin
+*> - wEndOfFile
        OPEN INPUT fher
-       MOVE 0 TO Wfin
+       MOVE 0 TO wEndOfFile
        MOVE 0 TO l_h_id
        PERFORM WITH TEST AFTER UNTIL Wfin = 1
            READ fher
-           AT END MOVE 1 TO Wfin
+           AT END MOVE 1 TO wEndOfFile
            NOT AT END
                ADD 1 TO l_h_id
            END-READ
@@ -158,5 +161,52 @@ STOP RUN.
                 DISPLAY "feuille/fleur/mixte"
                 ACCEPT fh_type
         END-PERFORM
-        
+  
+
+count_utilisateurs.
+*> Compte le nombre d'utilisateurs présents dans la fichier utilisateurs
+*> et stocke le résultat dans wUtilisateursCount
+*>
+*> Variables utilisées :
+*> - wUtilisateursCount
+*> - wEndOfFile
+*>
+*> Nombre de lectures :
+*> - Autant qu'il y a d'utilisateurs dans le fichiers utilisateurs
+       OPEN INPUT futil
+       MOVE 0 TO wEndOfFile
+       MOVE 0 TO wUtilisateursCount
+       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+           READ futil
+           AT END          MOVE 1 TO wEndOfFile
+           NOT AT END
+               ADD 1 TO wUtilisateursCount
+           END-READ
+       END-PERFORM
+       CLOSE futil.
+
+
+
+add_default_user_if_first_start.
+*> Ajoute l'utilisateur par défaut (cf readme.md) si aucun utilisateur
+*> n'est déjà présent dans le fichier
+*> 
+*> Variables utilisées :
+*> - wUtilisateursCount
+*>
+*> Nombre de lectures :
+*> - Autant qu'il y a d'utilisateurs dans le fichier utilisateurs
+       PERFORM count_utilisateurs
+       IF wUtilisateursCount < 1 THEN
+           MOVE 1 TO fu_id
+           MOVE "admin" TO fu_login
+           MOVE "admin" TO fu_mdp
+           MOVE "Administrateur" TO fu_role
+           MOVE "Professionnel" TO fu_type
+
+           OPEN I-O futil
+           WRITE tamp_futil
+           END-WRITE
+           CLOSE futil
+       END-IF.
 
