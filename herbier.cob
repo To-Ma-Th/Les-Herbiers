@@ -83,9 +83,8 @@ WORKING-STORAGE SECTION.
         77 cr_fher PIC 9(2).
         77 cr_futil PIC 9(2).
         77 cr_fhpl PIC 9(2).
-
+        77 l_h_id PIC 9(3).
         77 wEndOfFile PIC 9(1).
-
         77 wUtilisateursCount PIC 9(3).
         
         
@@ -120,6 +119,49 @@ PERFORM add_default_user_if_first_start.
 
 STOP RUN.
 
+*> herbier
+
+
+       last_herbier_id.
+*> Compte le nombre d'herbier présents dans la fichier herbier
+*> et stocke le résultat dans l_h_id
+*>
+*> Variables utilisées :
+*> - l_h_id
+*> - wEndOfFile
+       OPEN INPUT fher
+       MOVE 0 TO wEndOfFile
+       MOVE 0 TO l_h_id
+       PERFORM WITH TEST AFTER UNTIL Wfin = 1
+           READ fher
+           AT END MOVE 1 TO wEndOfFile
+           NOT AT END
+               ADD 1 TO l_h_id
+           END-READ
+       END-PERFORM
+       CLOSE fher.
+       
+       
+        add_herbier.
+*> Permet d'ajouter un herbier dans le fichier herbier
+*> 
+*> Variables utilisées :
+*> - l_h_id
+         PERFORM last_herbier_id
+         l_h_id = l_h_id + 1
+         MOVE l_h_id TO fh_id 
+         DISPLAY "Nom de l'herbier ?"
+         ACCEPT fh_nom
+         Move wConnectedUser to fh_utilisateur
+         FUNCTION CURRENT-DATE to WS-CURRENT-DATE
+         Move WS-CURRENT-DATE to fh_date
+         PERFORM WITH TEST AFTER UNTIL fh_type = 'feuille' 
+                OR fh_type = 'fleur' OR fh_type = 'mixte'  
+                DISPLAY "Type de l'herbier"
+                DISPLAY "feuille/fleur/mixte"
+                ACCEPT fh_type
+        END-PERFORM
+  
 
 count_utilisateurs.
 *> Compte le nombre d'utilisateurs présents dans la fichier utilisateurs
