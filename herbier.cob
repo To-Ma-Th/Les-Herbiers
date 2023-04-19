@@ -147,5 +147,16 @@ STOP RUN.
          PERFORM last_herbier_id
          l_h_id = l_h_id + 1
          MOVE l_h_id TO fh_id 
+         DISPLAY "Nom de l'herbier ?"
+         ACCEPT fh_nom
+         Move wConnectedUser to fh_utilisateur
+         FUNCTION CURRENT-DATE to WS-CURRENT-DATE
+         Move WS-CURRENT-DATE to fh_date
+         PERFORM WITH TEST AFTER UNTIL fh_type = 'feuille' 
+                OR fh_type = 'fleur' OR fh_type = 'mixte'  
+                DISPLAY "Type de l'herbier"
+                DISPLAY "feuille/fleur/mixte"
+                ACCEPT fh_type
+        END-PERFORM
         
 
