@@ -50,12 +50,13 @@ FD fplan.
                 02 pl_habitat PIC A(15).
                 02 pl_saison PIC A(15).
                 02 pl_duree PIC 9(2).
+                02 pl_type PIC A(15).
                 
 FD fher.
         01 tamp_fher.
                 02 fh_id PIC 9(3).
                 02 fh_nom PIC A(30).
-                02 fh_utilisateur PIC A(30).
+                02 fh_utilisateur PIC 9(3).
                 02 fh_date PIC A(15).
                 02 fh_type PIC A(20).
               
@@ -79,13 +80,27 @@ FD fhpl.
 
                
 WORKING-STORAGE SECTION.
-        77 cr_fplan PIC 9(2).
-        77 cr_fher PIC 9(2).
-        77 cr_futil PIC 9(2).
-        77 cr_fhpl PIC 9(2).
-        77 l_h_id PIC 9(3).
-        77 wEndOfFile PIC 9(1).
-        77 wUtilisateursCount PIC 9(3).
+      *> Constantes
+       77 CONST_ROLE_READER PIC A(15).
+       77 CONST_ROLE_EDITOR PIC A(15).
+       77 CONST_ROLE_ADMIN PIC A(15).
+       77 CONST_PLANT_LEAF PIC A(15).
+       77 CONST_PLANT_FLOWER PIC A(15).
+       77 CONST_HERBIER_LEAF PIC A(15).
+       77 CONST_HERBIER_FLOWER PIC A(15).
+       77 CONST_HERBIER_MIXTE PIC A(15).
+
+      *> CRs
+       77 cr_fplan PIC 9(2).
+       77 cr_fher PIC 9(2).
+       77 cr_futil PIC 9(2).
+       77 cr_fhpl PIC 9(2).
+
+      *> Variables globales
+       77 l_h_id PIC 9(3).
+       77 wEndOfFile PIC 9(1).
+       77 wUtilisateursCount PIC 9(3).
+       77 wConnectedUser PIC 9(3).
         
         
 PROCEDURE DIVISION.
@@ -114,6 +129,16 @@ IF cr_fhpl=35 THEN
 END-IF
 CLOSE fhpl
 
+*> Définition des constantes
+MOVE "Visiteur" TO CONST_ROLE_READER.
+MOVE "Éditeur" TO CONST_ROLE_EDITOR.
+MOVE "Administrateur" TO CONST_ROLE_ADMIN.
+MOVE "Feuille" TO CONST_PLANT_LEAF.
+MOVE "Fleur" TO CONST_PLANT_FLOWER.
+MOVE "Feuille" TO CONST_HERBIER_LEAF.
+MOVE "Fleur" TO CONST_HERBIER_FLOWER.
+MOVE "Mixte" TO CONST_HERBIER_MIXTE.
+
 *> Insertion automatique d'un untilisateur s'il n'y en a pas déjà
 PERFORM add_default_user_if_first_start.
 
@@ -132,7 +157,7 @@ STOP RUN.
        OPEN INPUT fher
        MOVE 0 TO wEndOfFile
        MOVE 0 TO l_h_id
-       PERFORM WITH TEST AFTER UNTIL Wfin = 1
+       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
            READ fher
            AT END MOVE 1 TO wEndOfFile
            NOT AT END
@@ -142,25 +167,25 @@ STOP RUN.
        CLOSE fher.
        
        
-        add_herbier.
+       add_herbier.
 *> Permet d'ajouter un herbier dans le fichier herbier
 *> 
 *> Variables utilisées :
 *> - l_h_id
-         PERFORM last_herbier_id
-         l_h_id = l_h_id + 1
-         MOVE l_h_id TO fh_id 
-         DISPLAY "Nom de l'herbier ?"
-         ACCEPT fh_nom
-         Move wConnectedUser to fh_utilisateur
-         FUNCTION CURRENT-DATE to WS-CURRENT-DATE
-         Move WS-CURRENT-DATE to fh_date
-         PERFORM WITH TEST AFTER UNTIL fh_type = 'feuille' 
-                OR fh_type = 'fleur' OR fh_type = 'mixte'  
-                DISPLAY "Type de l'herbier"
-                DISPLAY "feuille/fleur/mixte"
-                ACCEPT fh_type
-        END-PERFORM
+       PERFORM last_herbier_id
+       ADD 1 TO l_h_id
+       MOVE l_h_id TO fh_id 
+       DISPLAY "Nom de l'herbier ?"
+       ACCEPT fh_nom
+       MOVE wConnectedUser TO fh_utilisateur
+       MOVE FUNCTION CURRENT-DATE TO fh_date
+       PERFORM WITH TEST AFTER UNTIL fh_type = CONST_HERBIER_LEAF
+               OR fh_type = CONST_HERBIER_FLOWER
+               OR fh_type = CONST_HERBIER_MIXTE
+           DISPLAY "Type de l'herbier"
+           DISPLAY "Feuille/Fleur/Mixte (attention à la majuscule)"
+           ACCEPT fh_type
+       END-PERFORM.
   
 
 count_utilisateurs.
