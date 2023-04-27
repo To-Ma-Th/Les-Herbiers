@@ -82,6 +82,7 @@ FD fhpl.
 WORKING-STORAGE SECTION.
       *> Constantes
        77 CONST_ROLE_READER PIC A(15).
+       77 CONST_ROLE_WAITING PIC A(15).
        77 CONST_ROLE_EDITOR PIC A(15).
        77 CONST_ROLE_ADMIN PIC A(15).
        77 CONST_PLANT_LEAF PIC A(15).
@@ -137,6 +138,7 @@ CLOSE fhpl
 
 *> Définition des constantes
 MOVE "Visiteur" TO CONST_ROLE_READER.
+MOVE "En attente" TO CONST_ROLE_WAITING.
 MOVE "Éditeur" TO CONST_ROLE_EDITOR.
 MOVE "Administrateur" TO CONST_ROLE_ADMIN.
 MOVE "Feuille" TO CONST_PLANT_LEAF.
@@ -292,8 +294,10 @@ login.
            END-READ
            CLOSE futil
 
-           IF NOT wConnectedUser = 0 AND NOT wPassword = fu_mdp THEN
-              *> Mot de passe incorrect, on repasse à 0
+           IF NOT wConnectedUser = 0 AND NOT wPassword = fu_mdp
+               OR fu_role = CONST_ROLE_WAITING THEN
+              *> Mot de passe incorrect ou utilisateur pas encore validé
+              *> -> on repasse à 0
                MOVE 0 TO wConnectedUser
            END-IF
        END-PERFORM
@@ -333,4 +337,5 @@ display_user_info.
            DISPLAY "Nom : ", fu_login, "           ",
                    "Role : ", fu_role
        END-IF.
+
 
