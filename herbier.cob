@@ -104,6 +104,7 @@ WORKING-STORAGE SECTION.
        77 wExitProgramme PIC 9(1).
        77 wLoginTrialsCount PIC 9(1).
        77 wPassword PIC A(20).
+       77 wIsAnonymous PIC 9(1).
         
         
 PROCEDURE DIVISION.
@@ -302,5 +303,34 @@ login.
        END-IF
        IF NOT wConnectedUser = 0 THEN
            DISPLAY "Vous êtes connecté en tant que :"
-          *> PERFORM display_user_info
+           PERFORM display_user_info
        END-IF.
+
+display_user_info.
+*> Affiche le login (nom) ainsi que le rôle de l'utilisateur actuelle-
+*> ment connecté.
+*>
+*> Variables utilisées :
+*> - wConnectedUser (valeur inchangée)
+*> - wIsAnonymous
+*>
+*> Nombre de lectures :
+*> Une seule, on vient lire les informations sur un t-uple d'un fichier
+*> indexé.
+       MOVE wConnectedUser TO fu_id
+       MOVE 0 TO wIsAnonymous
+
+       OPEN INPUT futil
+       READ futil
+       KEY IS fu_id
+           INVALID KEY     MOVE 1 TO wIsAnonymous
+       END-READ
+       CLOSE futil
+
+       IF wIsAnonymous = 1 THEN
+           DISPLAY "Nom : Anonyme                  Role : Visiteur"
+       ELSE
+           DISPLAY "Nom : ", fu_login, "           ",
+                   "Role : ", fu_role
+       END-IF.
+
