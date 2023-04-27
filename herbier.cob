@@ -85,6 +85,8 @@ WORKING-STORAGE SECTION.
        77 CONST_ROLE_WAITING PIC A(15).
        77 CONST_ROLE_EDITOR PIC A(15).
        77 CONST_ROLE_ADMIN PIC A(15).
+       77 CONST_USER_PRO PIC A(15).
+       77 CONST_USER_AMATEUR PIC A(15).
        77 CONST_PLANT_LEAF PIC A(15).
        77 CONST_PLANT_FLOWER PIC A(15).
        77 CONST_HERBIER_LEAF PIC A(15).
@@ -106,6 +108,8 @@ WORKING-STORAGE SECTION.
        77 wLoginTrialsCount PIC 9(1).
        77 wPassword PIC A(20).
        77 wIsAnonymous PIC 9(1).
+       77 wLogin PIC A(20).
+       77 wUniqueLogin PIC 9(1).
         
         
 PROCEDURE DIVISION.
@@ -141,11 +145,15 @@ MOVE "Visiteur" TO CONST_ROLE_READER.
 MOVE "En attente" TO CONST_ROLE_WAITING.
 MOVE "Éditeur" TO CONST_ROLE_EDITOR.
 MOVE "Administrateur" TO CONST_ROLE_ADMIN.
+MOVE "Professionnel" TO CONST_USER_PRO.
+MOVE "Amateur" TO CONST_USER_AMATEUR.
 MOVE "Feuille" TO CONST_PLANT_LEAF.
 MOVE "Fleur" TO CONST_PLANT_FLOWER.
 MOVE "Feuille" TO CONST_HERBIER_LEAF.
 MOVE "Fleur" TO CONST_HERBIER_FLOWER.
 MOVE "Mixte" TO CONST_HERBIER_MIXTE.
+
+MOVE 1 TO wIsAnonymous.
 
 *> Insertion automatique d'un untilisateur s'il n'y en a pas déjà
 PERFORM add_default_user_if_first_start.
@@ -310,26 +318,41 @@ login.
            PERFORM display_user_info
        END-IF.
 
+check_connection.
+*> Vérifie si l'utilisateur est connecté.
+*>
+*> Variables utilisées :
+*> - wConnectedUser
+*> - wIsAnonymous
+*>
+*> Nombre de lectures : 1
+       MOVE 1 TO wIsAnonymous
+       MOVE wConnectedUser TO fu_id
+
+       OPEN INPUT futil
+       READ futil
+       KEY IS fu_id
+           NOT INVALID KEY
+           IF NOT fu_role = CONST_ROLE_WAITING THEN
+               MOVE 0 TO wIsAnonymous
+           ELSE
+              *> On a détecté un cas qui ne devrait pas arriver, alors
+              *> on ferme la connexion par précaution.
+               MOVE 0 TO wConnectedUser
+           END-IF
+       END-READ
+       CLOSE futil.
+
+
 display_user_info.
 *> Affiche le login (nom) ainsi que le rôle de l'utilisateur actuelle-
 *> ment connecté.
 *>
 *> Variables utilisées :
-*> - wConnectedUser (valeur inchangée)
 *> - wIsAnonymous
 *>
-*> Nombre de lectures :
-*> Une seule, on vient lire les informations sur un t-uple d'un fichier
-*> indexé.
-       MOVE wConnectedUser TO fu_id
-       MOVE 0 TO wIsAnonymous
-
-       OPEN INPUT futil
-       READ futil
-       KEY IS fu_id
-           INVALID KEY     MOVE 1 TO wIsAnonymous
-       END-READ
-       CLOSE futil
+*> Nombre de lectures : aucune
+       PERFORM check_connection
 
        IF wIsAnonymous = 1 THEN
            DISPLAY "Nom : Anonyme                  Role : Visiteur"
@@ -338,4 +361,57 @@ display_user_info.
                    "Role : ", fu_role
        END-IF.
 
+check_unique_login.
+*> Vérifie si un login donné via la variable wLogin est unique
+*>
+*> Variables utilisées :
+*> wLogin
+*> wUniqueLogin
+*> 
+*> Nombre de lectures : 1
+       MOVE 0 TO wUniqueLogin
+       MOVE wLogin TO fu_login
 
+       OPEN INPUT futil
+       READ futil
+       KEY IS fu_login
+           INVALID KEY     MOVE 1 TO wUniqueLogin
+       END-READ
+       CLOSE futil.
+
+sign_in.
+*> Permet à un utilisateur de poser une candidature en tant qu'éditeur.
+*>
+*> Variables utilisées :
+*> - wUniqueLogin
+*> - wLogin
+*> - wPassword
+*>
+*> Nombre de lectures : aucune
+       MOVE 1 TO wUniqueLogin
+       PERFORM WITH TEST AFTER UNTIL wUniqueLogin = 1
+           IF wUniqueLogin = 0 THEN
+               DISPLAY "Ce nom est déjà pris..."
+           END-IF
+           DISPLAY "Veuillez entrer un nom d'utilisateur"
+
+           ACCEPT wLogin
+           PERFORM check_unique_login
+       END-PERFORM
+
+       DISPLAY "Choisissez votre mot de passe"
+       ACCEPT wPassword
+
+      *> Prêt à insérer, on incrémente l'index utilisateur
+       ADD 1 TO wUtilisateursCount
+
+       MOVE wUtilisateursCount TO fu_id
+       MOVE wLogin TO fu_login
+       MOVE wPassword TO fu_mdp
+       MOVE CONST_ROLE_WAITING TO fu_role
+       MOVE CONST_USER_AMATEUR TO fu_type
+
+       OPEN I-O futil
+       WRITE tamp_futil
+       END-WRITE
+       CLOSE futil.
