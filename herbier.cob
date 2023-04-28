@@ -110,6 +110,8 @@ WORKING-STORAGE SECTION.
        77 wIsAnonymous PIC 9(1).
        77 wLogin PIC A(20).
        77 wUniqueLogin PIC 9(1).
+       77 wDisplayedTable PIC 9(1).
+       77 wWaitlistEmpty PIC 9(1).
         
         
 PROCEDURE DIVISION.
@@ -415,3 +417,45 @@ sign_in.
        WRITE tamp_futil
        END-WRITE
        CLOSE futil.
+
+display_waiting_users.
+*> Affiche sous la forme d'une table les utilisateurs en attente de va-
+*> lidation par un administrateur.
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+*> - wDisplayedTable
+*> - wWaitlistEmpty
+*>
+*> Nombre de lectures : Autant qu'il y a d'utilisteurs en attente (lec-
+*> ture sur zone)
+       MOVE 0 TO wEndOfFile
+       MOVE 0 TO wDisplayedTable
+       MOVE 0 TO wWaitlistEmpty
+       MOVE CONST_ROLE_WAITING TO fu_role
+
+       
+       OPEN INPUT futil
+       START futil, KEY IS = fu_role
+       INVALID KEY
+           DISPLAY "Aucune inscription à vérifier."
+           MOVE 1 TO wWaitlistEmpty
+       NOT INVALID KEY
+           DISPLAY "ID  | Login choisi         | Role actuel    "
+           DISPLAY "----|----------------------|----------------"
+           PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+               READ futil NEXT
+               AT END      MOVE 1 TO wEndOfFile
+               NOT AT END
+                   IF fu_role = CONST_ROLE_WAITING THEN
+                       DISPLAY fu_id, " | ", fu_login, " | ",
+                               fu_role
+                   ELSE
+                       MOVE 1 TO wEndOfFile
+                   END-IF
+               END-READ
+           END-PERFORM
+       END-START
+       CLOSE futil.
+               
+
