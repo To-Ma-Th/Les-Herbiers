@@ -93,6 +93,9 @@ WORKING-STORAGE SECTION.
        77 CONST_HERBIER_FLOWER PIC A(15).
        77 CONST_HERBIER_MIXTE PIC A(15).
 
+       77 CONST_ACTION_SENTENCE PIC A(38).
+       77 CONST_ACTION_IMPOSSIBLE PIC A(19).
+
       *> CRs
        77 cr_fplan PIC 9(2).
        77 cr_fher PIC 9(2).
@@ -110,8 +113,11 @@ WORKING-STORAGE SECTION.
        77 wIsAnonymous PIC 9(1).
        77 wLogin PIC A(20).
        77 wUniqueLogin PIC 9(1).
-       77 wDisplayedTable PIC 9(1).
        77 wWaitlistEmpty PIC 9(1).
+       
+       77 wActionChosen PIC 9(1).
+       77 wValidInput PIC 9(1).
+       77 wExitFunction PIC 9(1).
         
         
 PROCEDURE DIVISION.
@@ -154,6 +160,9 @@ MOVE "Fleur" TO CONST_PLANT_FLOWER.
 MOVE "Feuille" TO CONST_HERBIER_LEAF.
 MOVE "Fleur" TO CONST_HERBIER_FLOWER.
 MOVE "Mixte" TO CONST_HERBIER_MIXTE.
+
+MOVE "Indiquez ce que vous souhaitez faire :" TO CONST_ACTION_SENTENCE
+MOVE "Action impossible !" TO CONST_ACTION_IMPOSSIBLE
 
 MOVE 1 TO wIsAnonymous.
 
@@ -318,6 +327,7 @@ login.
        IF NOT wConnectedUser = 0 THEN
            DISPLAY "Vous êtes connecté en tant que :"
            PERFORM display_user_info
+           DISPLAY " "
        END-IF.
 
 check_connection.
@@ -403,6 +413,7 @@ sign_in.
 
        DISPLAY "Choisissez votre mot de passe"
        ACCEPT wPassword
+       DISPLAY " "
 
       *> Prêt à insérer, on incrémente l'index utilisateur
        ADD 1 TO wUtilisateursCount
@@ -424,13 +435,11 @@ display_waiting_users.
 *>
 *> Variables utilisées :
 *> - wEndOfFile
-*> - wDisplayedTable
 *> - wWaitlistEmpty
 *>
 *> Nombre de lectures : Autant qu'il y a d'utilisteurs en attente (lec-
 *> ture sur zone)
        MOVE 0 TO wEndOfFile
-       MOVE 0 TO wDisplayedTable
        MOVE 0 TO wWaitlistEmpty
        MOVE CONST_ROLE_WAITING TO fu_role
 
@@ -458,4 +467,210 @@ display_waiting_users.
        END-START
        CLOSE futil.
                
+display_waiting_users_menu.
+*> Affiche le menu (table + actions) pour gérer les utilistaeurs en at-
+*> tente.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wWaitlistEmpty
+*> 
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
 
+       PERFORM WITH TEST AFTER UNTIL wActionChosen < 4
+                                 AND wActionChosen >= 0
+           PERFORM display_waiting_users
+           DISPLAY " "
+
+           IF wActionChosen > 3 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+    
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+           
+           IF wWaitlistEmpty = 0 THEN
+               DISPLAY "        1 : accepter en tant qu'",
+                       CONST_ROLE_EDITOR
+               DISPLAY "        2 : accpeter en tant qu'",
+                       CONST_ROLE_ADMIN
+               DISPLAY "        3 : refuser (supprimera la candidature)"
+               DISPLAY " "
+           END-IF
+           DISPLAY "        0 : retourner à la page d'acceuil"
+           DISPLAY " "
+    
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+          *> retour à la page d'accueil
+       WHEN 1
+          *> passage de l'utilisateur en tant qu'éditeur
+           PERFORM accept_user_editor
+           PERFORM display_waiting_users_menu
+       WHEN 2
+          *> passage de l'utilisateur en tant qu'administrateur
+           PERFORM accept_user_admin
+           PERFORM display_waiting_users_menu
+       WHEN 3
+          *> suppression de l'utilisateur
+           PERFORM deny_user
+           PERFORM display_waiting_users_menu
+       END-EVALUATE.
+
+accept_user_editor.
+*> Change le rôle d'un utilisateur donné pour le rôle Éditeur
+*>
+*> Variables utilisées :
+*> - wValidInput
+*> - wLogin
+*> - wExitFunction
+*>
+*> Nombre de lectures : une pour récupérer l'utilisateur dont le login
+*> est entré.
+       MOVE 1 TO wValidInput
+       MOVE 0 TO wExitFunction
+
+       PERFORM WITH TEST AFTER UNTIL wValidInput = 1
+           IF wValidInput = 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY "Entrez le login de l'utilisateur à accepter en ",
+                   "tant qu'", CONST_ROLE_EDITOR, " ou 0 pour revenir ",
+                   "en arrière."
+           ACCEPT wLogin
+           DISPLAY " "
+
+           MOVE wLogin TO fu_login
+           OPEN INPUT futil
+           READ futil
+           KEY IS fu_login
+               INVALID KEY     MOVE 0 TO wValidInput
+               NOT INVALID KEY
+                   IF fu_role = CONST_ROLE_WAITING THEN
+                       MOVE 1 TO wValidInput
+                    END-IF
+           END-READ
+           CLOSE futil
+
+           IF wLogin = "0" THEN
+               MOVE 1 TO wValidInput
+               MOVE 1 TO wExitFunction
+           END-IF
+       END-PERFORM
+
+       IF wExitFunction = 0 THEN
+           OPEN I-O futil
+           READ futil
+           NOT INVALID KEY
+               MOVE CONST_ROLE_EDITOR TO fu_role
+               REWRITE tamp_futil
+           END-READ
+           CLOSE futil
+       END-IF.
+
+accept_user_admin.
+*> Change le rôle d'un utilisateur donné pour le rôle Administrateur
+*>
+*> Variables utilisées :
+*> - wValidInput
+*> - wLogin
+*> - wExitFunction
+*>
+*> Nombre de lectures : une pour récupérer l'utilisateur dont le login
+*> est entré.
+       MOVE 1 TO wValidInput
+       MOVE 0 TO wExitFunction
+
+       PERFORM WITH TEST AFTER UNTIL wValidInput = 1
+           IF wValidInput = 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY "Entrez le login de l'utilisateur à accepter en ",
+                   "tant qu'", CONST_ROLE_ADMIN, " ou 0 pour revenir ",
+                   "en arrière."
+           ACCEPT wLogin
+           DISPLAY " "
+
+           MOVE wLogin TO fu_login
+           OPEN INPUT futil
+           READ futil
+           KEY IS fu_login
+               INVALID KEY     MOVE 0 TO wValidInput
+               NOT INVALID KEY
+                   IF fu_role = CONST_ROLE_WAITING THEN
+                       MOVE 1 TO wValidInput
+                    END-IF
+           END-READ
+           CLOSE futil
+
+           IF wLogin = "0" THEN
+               MOVE 1 TO wValidInput
+               MOVE 1 TO wExitFunction
+           END-IF
+       END-PERFORM
+
+       IF wExitFunction = 0 THEN
+           OPEN I-O futil
+           READ futil
+           NOT INVALID KEY
+               MOVE CONST_ROLE_ADMIN TO fu_role
+               REWRITE tamp_futil
+           END-READ
+           CLOSE futil
+       END-IF.
+
+deny_user.
+*> Supprime un utilisateur en attente
+*>
+*> Variables utilisées :
+*> - wValidInput
+*> - wLogin
+*> - wExitFunction
+*>
+*> Nombre de lectures : 1
+       MOVE 1 TO wValidInput
+       MOVE 0 TO wExitFunction
+
+       PERFORM WITH TEST AFTER UNTIL wValidInput = 1
+           IF wValidInput = 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY "Entrez le login de l'utilisateur à supprimer ou 0 ",
+                   "pour revenir en arrière."
+           ACCEPT wLogin
+           DISPLAY " "
+
+           MOVE wLogin TO fu_login
+           OPEN INPUT futil
+           READ futil
+           KEY IS fu_login
+               INVALID KEY     MOVE 0 TO wValidInput
+               NOT INVALID KEY
+                   IF fu_role = CONST_ROLE_WAITING THEN
+                       MOVE 1 TO wValidInput
+                    END-IF
+           END-READ
+           CLOSE futil
+
+           IF wLogin = "0" THEN
+               MOVE 1 TO wValidInput
+               MOVE 1 TO wExitFunction
+           END-IF
+       END-PERFORM
+
+       IF wExitFunction = 0 THEN
+           OPEN I-O futil
+           READ futil
+           NOT INVALID KEY
+               DELETE futil RECORD
+           END-READ
+           CLOSE futil
+       END-IF.
