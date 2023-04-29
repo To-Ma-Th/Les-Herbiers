@@ -93,6 +93,7 @@ WORKING-STORAGE SECTION.
        77 CONST_HERBIER_FLOWER PIC A(15).
        77 CONST_HERBIER_MIXTE PIC A(15).
 
+       77 CONST_DISPLAY_MENU PIC A(30).
        77 CONST_ACTION_SENTENCE PIC A(38).
        77 CONST_ACTION_IMPOSSIBLE PIC A(19).
 
@@ -106,6 +107,7 @@ WORKING-STORAGE SECTION.
        77 l_h_id PIC 9(3).
        77 wEndOfFile PIC 9(1).
        77 wUtilisateursCount PIC 9(3).
+       77 wMaxUserId PIC 9(3).
        77 wConnectedUser PIC 9(3).
        77 wExitProgramme PIC 9(1).
        77 wLoginTrialsCount PIC 9(1).
@@ -151,7 +153,7 @@ CLOSE fhpl
 *> Définition des constantes
 MOVE "Visiteur" TO CONST_ROLE_READER.
 MOVE "En attente" TO CONST_ROLE_WAITING.
-MOVE "Éditeur" TO CONST_ROLE_EDITOR.
+MOVE "Editeur" TO CONST_ROLE_EDITOR.
 MOVE "Administrateur" TO CONST_ROLE_ADMIN.
 MOVE "Professionnel" TO CONST_USER_PRO.
 MOVE "Amateur" TO CONST_USER_AMATEUR.
@@ -161,8 +163,9 @@ MOVE "Feuille" TO CONST_HERBIER_LEAF.
 MOVE "Fleur" TO CONST_HERBIER_FLOWER.
 MOVE "Mixte" TO CONST_HERBIER_MIXTE.
 
-MOVE "Indiquez ce que vous souhaitez faire :" TO CONST_ACTION_SENTENCE
-MOVE "Action impossible !" TO CONST_ACTION_IMPOSSIBLE
+MOVE "------------------------------" TO CONST_DISPLAY_MENU.
+MOVE "Indiquez ce que vous souhaitez faire :" TO CONST_ACTION_SENTENCE.
+MOVE "Action impossible !" TO CONST_ACTION_IMPOSSIBLE.
 
 MOVE 1 TO wIsAnonymous.
 
@@ -225,22 +228,28 @@ STOP RUN.
 
 count_utilisateurs.
 *> Compte le nombre d'utilisateurs présents dans la fichier utilisateurs
-*> et stocke le résultat dans wUtilisateursCount
+*> et stocke le résultat dans wUtilisateursCount. On en profite pour
+*> actualiser la valeur de wMaxUserId, qui sert pour l'insertion.
 *>
 *> Variables utilisées :
 *> - wUtilisateursCount
 *> - wEndOfFile
+*> - wMaxUserId
 *>
 *> Nombre de lectures :
 *> - Autant qu'il y a d'utilisateurs dans le fichiers utilisateurs
        OPEN INPUT futil
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wUtilisateursCount
+       MOVE 0 TO wMaxUserId
        PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
            READ futil
            AT END          MOVE 1 TO wEndOfFile
            NOT AT END
                ADD 1 TO wUtilisateursCount
+               IF fu_id > wMaxUserId THEN
+                   MOVE fu_id TO wMaxUserId
+               END-IF
            END-READ
        END-PERFORM
        CLOSE futil.
@@ -415,10 +424,11 @@ sign_in.
        ACCEPT wPassword
        DISPLAY " "
 
-      *> Prêt à insérer, on incrémente l'index utilisateur
+      *> Prêt à insérer, on incrémente l'index utilisateur et son compte
+       ADD 1 TO wMaxUserId
        ADD 1 TO wUtilisateursCount
 
-       MOVE wUtilisateursCount TO fu_id
+       MOVE wMaxUserId TO fu_id
        MOVE wLogin TO fu_login
        MOVE wPassword TO fu_mdp
        MOVE CONST_ROLE_WAITING TO fu_role
@@ -480,6 +490,8 @@ display_waiting_users_menu.
 
        PERFORM WITH TEST AFTER UNTIL wActionChosen < 4
                                  AND wActionChosen >= 0
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
            PERFORM display_waiting_users
            DISPLAY " "
 
@@ -534,7 +546,8 @@ accept_user_editor.
 *> est entré.
        MOVE 1 TO wValidInput
        MOVE 0 TO wExitFunction
-
+       
+       DISPLAY CONST_DISPLAY_MENU
        PERFORM WITH TEST AFTER UNTIL wValidInput = 1
            IF wValidInput = 0 THEN
                DISPLAY CONST_ACTION_IMPOSSIBLE
@@ -587,6 +600,7 @@ accept_user_admin.
        MOVE 1 TO wValidInput
        MOVE 0 TO wExitFunction
 
+       DISPLAY CONST_DISPLAY_MENU
        PERFORM WITH TEST AFTER UNTIL wValidInput = 1
            IF wValidInput = 0 THEN
                DISPLAY CONST_ACTION_IMPOSSIBLE
@@ -633,11 +647,13 @@ deny_user.
 *> - wValidInput
 *> - wLogin
 *> - wExitFunction
+*> - wUtilisateursCount
 *>
 *> Nombre de lectures : 1
        MOVE 1 TO wValidInput
        MOVE 0 TO wExitFunction
 
+       DISPLAY CONST_DISPLAY_MENU
        PERFORM WITH TEST AFTER UNTIL wValidInput = 1
            IF wValidInput = 0 THEN
                DISPLAY CONST_ACTION_IMPOSSIBLE
@@ -671,6 +687,212 @@ deny_user.
            READ futil
            NOT INVALID KEY
                DELETE futil RECORD
+               ADD -1 TO wUtilisateursCount
            END-READ
            CLOSE futil
+       END-IF.
+
+display_users.
+*> Affiche sous la forme d'une table les utilisateurs de l'application
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+*>
+*> Nombre de lectures : Autant qu'il y a d'utilisteurs dans l'appli
+       MOVE 0 TO wEndOfFile
+
+       DISPLAY "ID  | Login                | Role            | ",
+               "Type           "
+       DISPLAY "----|----------------------|-----------------|-",
+               "---------------"
+
+       OPEN INPUT futil
+       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+           READ futil
+           AT END          MOVE 1 TO wEndOfFile
+           NOT AT END
+               DISPLAY fu_id, " | ", fu_login, " | ", fu_role, " | ",
+                       fu_type
+           END-READ
+       END-PERFORM
+       CLOSE futil.
+
+display_users_menu.
+*> Affiche le menu de gestion des utilisateurs. Avant d'exécuter cette
+*> fonction, il est nécessaire de vérifier que l'utilisateur connecté
+*> est bien un administrateur !
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 3
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           PERFORM display_users
+           DISPLAY " "
+
+           IF wActionChosen > 2 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+
+           DISPLAY "        1 : modifer un utilisateur"
+           DISPLAY "        2 : supprimer un utilisateur"
+           DISPLAY " "
+           DISPLAY "        0 : retourner à la page d'acceuil"
+           DISPLAY " "
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+          *> retour à la page d'accueil
+       WHEN 1
+          *> modification d'un utilisateur
+           PERFORM update_user_menu
+           PERFORM display_users_menu
+       WHEN 2
+          *> suppression d'un utilisateur
+          *> PERFORM delete_user_menu
+           PERFORM display_users_menu
+       END-EVALUATE.
+
+update_user_menu.
+*> Permet de modifier un utilisateur. Cependant, l'ID et le login ne
+*> peuvent pas être modifiés !
+*>
+*> Variables utilisées :
+*> - wValidInput
+*> - wExitFunction
+*> - wLogin
+*>
+*> Nombre de lectures : 1
+       MOVE 1 TO wValidInput
+       MOVE 0 TO wExitFunction
+       
+       DISPLAY CONST_DISPLAY_MENU
+       PERFORM WITH TEST AFTER UNTIL wValidInput = 1
+           IF wValidInput = 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY "Entrez le login de l'utilisateur à modifier ou 0 ",
+                   "pour revenir en arrière."
+           ACCEPT wLogin
+           DISPLAY " "
+
+           MOVE wLogin TO fu_login
+           OPEN INPUT futil
+           READ futil
+           KEY IS fu_login
+               INVALID KEY     MOVE 0 TO wValidInput
+               NOT INVALID KEY
+                   MOVE 1 TO wValidInput
+           END-READ
+           CLOSE futil
+
+           IF wLogin = "0" THEN
+               MOVE 1 TO wValidInput
+               MOVE 1 TO wExitFunction
+           END-IF
+       END-PERFORM
+
+       IF wExitFunction = 0 THEN
+           OPEN I-O futil
+           READ futil
+           NOT INVALID KEY
+               PERFORM update_user
+               REWRITE tamp_futil
+           END-READ
+           CLOSE futil
+       END-IF.
+
+update_user.
+*> Modifie réellement un utilisateur.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> 
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier le mot de passe de ",
+                   "l'utilisateur ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+
+       IF wActionChosen = 1 THEN
+           DISPLAY "Entrez le nouveau mot de passe (20 caractères max)",
+                   " :"
+           ACCEPT fu_mdp
+       END-IF
+
+       MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier le rôle de l'utilisateur ?",
+                   " (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+
+       IF wActionChosen = 1 THEN
+           PERFORM WITH TEST AFTER UNTIL fu_role = CONST_ROLE_EDITOR
+                                      OR fu_role = CONST_ROLE_ADMIN
+               
+               IF NOT fu_role = CONST_ROLE_EDITOR 
+                       OR NOT fu_role = CONST_ROLE_ADMIN THEN
+                   DISPLAY CONST_ACTION_IMPOSSIBLE
+               END-IF
+
+               DISPLAY "Entrez le nouveau rôle (", CONST_ROLE_EDITOR, "/",
+                       CONST_ROLE_ADMIN, ") :"
+               ACCEPT fu_role
+           END-PERFORM
+       END-IF
+
+       MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier le type de l'utilisateur ?",
+                   " (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+
+       IF wActionChosen = 1 THEN
+           PERFORM WITH TEST AFTER UNTIL fu_type = CONST_USER_AMATEUR
+                                      OR fu_type = CONST_USER_PRO
+               
+               IF NOT fu_type = CONST_USER_AMATEUR 
+                       OR NOT fu_type = CONST_USER_PRO THEN
+                   DISPLAY CONST_ACTION_IMPOSSIBLE
+               END-IF
+
+               DISPLAY "Entrez le nouveau type (", CONST_USER_AMATEUR, 
+                       "/", CONST_USER_PRO, ") :"
+               ACCEPT fu_type
+           END-PERFORM
        END-IF.
