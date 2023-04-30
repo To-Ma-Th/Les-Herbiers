@@ -761,7 +761,7 @@ display_users_menu.
            PERFORM display_users_menu
        WHEN 2
           *> suppression d'un utilisateur
-          *> PERFORM delete_user_menu
+           PERFORM delete_user_menu
            PERFORM display_users_menu
        END-EVALUATE.
 
@@ -895,4 +895,64 @@ update_user.
                        "/", CONST_USER_PRO, ") :"
                ACCEPT fu_type
            END-PERFORM
+       END-IF.
+
+delete_user_menu.
+*> Permet de supprimer un utilisateur. Cependant, il est impossible de
+*> supprimer l'utilisateur actuellement connecté.
+*> 
+*> Variables utilisées :
+*> - wValidInput
+*> - wExitFunction
+*> - wLogin
+*> - wConnectedUser
+*>
+*> Nombre de lectures : 1
+       MOVE 1 TO wValidInput
+       MOVE 0 TO wExitFunction
+       
+       DISPLAY CONST_DISPLAY_MENU
+       PERFORM WITH TEST AFTER UNTIL wValidInput = 1
+           IF wValidInput = 0 AND NOT fu_id = wConnectedUser THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+           IF wValidInput = 0 AND fu_id = wConnectedUser THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE, " Vous ne pouvez pas ",
+                       "supprimer l'utilisateur auquel vous êtes ",
+                       "actuellement connecté."
+           END-IF
+
+           DISPLAY "Entrez le login de l'utilisateur à modifier ou 0 ",
+                   "pour revenir en arrière."
+           ACCEPT wLogin
+           DISPLAY " "
+
+           MOVE wLogin TO fu_login
+           OPEN INPUT futil
+           READ futil
+           KEY IS fu_login
+               INVALID KEY     MOVE 0 TO wValidInput
+               NOT INVALID KEY
+                   IF NOT fu_id = wConnectedUser THEN
+                       MOVE 1 TO wValidInput
+                   ELSE
+                       MOVE 0 TO wValidInput
+                   END-IF
+           END-READ
+           CLOSE futil
+
+           IF wLogin = "0" THEN
+               MOVE 1 TO wValidInput
+               MOVE 1 TO wExitFunction
+           END-IF
+       END-PERFORM
+
+       IF wExitFunction = 0 THEN
+           OPEN I-O futil
+           READ futil
+           NOT INVALID KEY
+               DELETE futil RECORD
+               ADD -1 TO wUtilisateursCount
+           END-READ
+           CLOSE futil
        END-IF.
