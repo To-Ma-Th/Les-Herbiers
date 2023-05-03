@@ -53,12 +53,12 @@ FD fplan.
            02 pl_type PIC A(15).
                 
 FD fher.
-       01 tamp_fher.
-           02 fh_id PIC 9(3).
-           02 fh_nom PIC A(30).
-           02 fh_utilisateur PIC 9(3).
-           02 fh_date PIC A(15).
-           02 fh_type PIC A(20).
+        01 tamp_fher.
+                02 fh_id PIC 9(3).
+                02 fh_nom PIC A(30).
+                02 fh_utilisateur PIC A(30).
+                02 fh_date PIC A(15).
+                02 fh_type PIC A(20).
               
 FD futil.
        01 tamp_futil.
@@ -116,6 +116,9 @@ WORKING-STORAGE SECTION.
        77 wLogin PIC A(20).
        77 wUniqueLogin PIC 9(1).
        77 wWaitlistEmpty PIC 9(1).
+
+       77 wNoHerbier PIC 9(1).
+       77 wSelectedHerbierId PIC 9(3).
        
        77 wActionChosen PIC 9(1).
        77 wValidInput PIC 9(1).
@@ -171,14 +174,20 @@ MOVE 1 TO wIsAnonymous.
 
 *> Insertion automatique d'un untilisateur s'il n'y en a pas déjà
 PERFORM add_default_user_if_first_start.
+PERFORM last_herbier_id
 
-*> >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-*> La boucle du main (c'est ici qu'il faudra rajouter les instructions à
-*> effectuer pendant la vie du programme, comme l'affichage du menu
-*> principal, ...)
-PERFORM WITH TEST AFTER UNTIL wExitProgramme = 1
-      *> TODO
-END-PERFORM.
+MOVE fu_id TO wConnectedUser.
+PERFORM display_all_herbier.
+DISPLAY " ".
+PERFORM display_user_herbier.
+DISPLAY " ".
+PERFORM display_herbier_by_id.
+DISPLAY " ".
+MOVE 2 TO wConnectedUser.
+PERFORM display_user_herbier.
+DISPLAY " ".
+PERFORM display_herbier_by_id.
+DISPLAY " ".
 
 STOP RUN.
 
@@ -210,23 +219,211 @@ STOP RUN.
 *> 
 *> Variables utilisées :
 *> - l_h_id
-       PERFORM last_herbier_id
-       ADD 1 TO l_h_id
-       MOVE l_h_id TO fh_id 
-       DISPLAY "Nom de l'herbier ?"
-       ACCEPT fh_nom
-       MOVE wConnectedUser TO fh_utilisateur
-       MOVE FUNCTION CURRENT-DATE TO fh_date
-       PERFORM WITH TEST AFTER UNTIL fh_type = CONST_HERBIER_LEAF
+         ADD 1 TO l_h_id
+         MOVE l_h_id TO fh_id 
+         DISPLAY "Nom de l'herbier ?"
+         ACCEPT fh_nom
+         MOVE wConnectedUser TO fh_utilisateur
+         MOVE FUNCTION CURRENT-DATE TO fh_date
+         PERFORM WITH TEST AFTER UNTIL fh_type = CONST_HERBIER_LEAF
                OR fh_type = CONST_HERBIER_FLOWER
-               OR fh_type = CONST_HERBIER_MIXTE
-           DISPLAY "Type de l'herbier"
-           DISPLAY "Feuille/Fleur/Mixte (attention à la majuscule)"
-           ACCEPT fh_type
-       END-PERFORM.
+               OR fh_type = CONST_HERBIER_MIXTE 
+                DISPLAY "Type de l'herbier"
+                DISPLAY "Feuille/Fleur/Mixte (attention à la majuscule)"
+                ACCEPT fh_type
+        END-PERFORM
+        OPEN I-O fher
+        WRITE tamp_fher
+        END-WRITE
+        CLOSE fher.
+        
+        delete_herbier.
+*> Permet de supprimer un herbier dans le fichier herbier
+*> 
+*> Variables utilisées :
+*> - l_h_id
+                 
+        OPEN I-O fhpl
+        MOVE 0 TO wEndOfFile
+        Move 0 TO wNoHerbier
+        MOVE wSelectedHerbierId TO fhpl_id
+        START fhpl, KEY IS = fhpl_id
+        INVALID KEY 
+         MOVE 1 TO wNoHerbier
+        NOT INVALID KEY
+           PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+              READ fhpl NEXT
+              AT END MOVE 1 TO wEndOfFile
+              NOT AT END 
+                 IF fhpl_id = wSelectedHerbierId THEN
+                     DELETE fhpl RECORD
+                 ELSE
+                       MOVE 1 TO wEndOfFile
+                END-IF
+              END-READ
+           END-PERFORM
+        END-START
+        CLOSE fhpl
+         
+        OPEN I-O fher
+        MOVE 0 TO wNoHerbier
+        MOVE wSelectedHerbierId TO fh_id
+        READ fher
+        INVALID KEY 
+         DISPLAY "Cet herbier n'existe pas"
+         MOVE 1 TO wNoHerbier
+        NOT INVALID KEY 
+         ADD -1 TO l_h_id
+         DELETE fher RECORD
+        END-READ
+        CLOSE fher.
+        
+        update_herbier.
+*> Permet de supprimer un herbier dans le fichier herbier
+*> 
+*> Variables utilisées :
+*> - l_h_id
+
+        MOVE 0 TO wActionChosen
+        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY "Choix impossible"
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier le nom de ",
+                   "l'herbier ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+        END-PERFORM
+       
+        IF wActionChosen = 1 THEN
+           DISPLAY "Entrez le nouveau nom :"
+           ACCEPT fh_nom
+        END-IF
+        
+        MOVE 0 TO wActionChosen
+        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY "Choix impossible"
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier le type de ",
+                   "l'herbier ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+        END-PERFORM
+       
+        IF wActionChosen = 1 THEN
+         PERFORM WITH TEST AFTER UNTIL fh_type = CONST_HERBIER_LEAF
+               OR fh_type = CONST_HERBIER_FLOWER
+               OR fh_type = CONST_HERBIER_MIXTE 
+                DISPLAY "Type de l'herbier"
+                DISPLAY "Feuille/Fleur/Mixte (attention à la majuscule)"
+                ACCEPT fh_type
+         END-PERFORM
+        END-IF
+        
+         OPEN I-O fher
+         READ fher
+         NOT INVALID KEY
+            REWRITE tamp_fher
+         END-READ
+         CLOSE fher.
+        
+        display_all_herbier.
+*> Permet d'afficher l'id, le nom et le type de tout les herbiers
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+        OPEN INPUT fher
+        MOVE 0 TO wEndOfFile
+        DISPLAY "ID  | Nom de l'herbier               | Type de l'herbi" 
+        "er    | ID de l'utilsateur  "
+        DISPLAY "----|--------------------------------|----------------"
+        "------|--------------------"
+        PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+                READ fher
+                AT END MOVE 1 TO wEndOfFile
+                NOT AT END 
+                 DISPLAY fh_id, " | ", fh_nom, " | ",
+                               fh_type, " | ",
+                               fh_utilisateur
+                END-READ
+        END-PERFORM
+        CLOSE fher.
+        
+        display_user_herbier.
+*> Permet d'afficher l'id, le nom et le type des herbiers de
+*> l'utilisateur courant
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+*> - wConnectedUser        
+        OPEN INPUT fher
+        MOVE 0 TO wEndOfFile
+        Move 0 TO wNoHerbier
+        MOVE wConnectedUser TO fh_utilisateur
+        START fher, KEY IS = fh_utilisateur
+        INVALID KEY 
+         DISPLAY "Vous n'avez pas créer d'herbier"
+         MOVE 1 TO wNoHerbier
+        NOT INVALID KEY
+        DISPLAY "ID  | Nom de l'herbier               | Type de l'herbi" 
+        "er    "
+        DISPLAY "----|--------------------------------|----------------"
+        "------"
+           PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+              READ fher NEXT
+              AT END MOVE 1 TO wEndOfFile
+              NOT AT END 
+                 IF fh_utilisateur = wConnectedUser THEN
+                     DISPLAY fh_id, " | ", fh_nom, " | ", fh_type
+                 ELSE
+                       MOVE 1 TO wEndOfFile
+                END-IF
+              END-READ
+           END-PERFORM
+        END-START
+        CLOSE fher.
+        
+        display_herbier_by_id.
+*> Permet d'afficher toutes les infos d'un herbier en fonction de son
+*> id
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+*> - wSelectedHerbierId 
+*> - wConnectedUser           
+        PERFORM display_all_herbier
+        DISPLAY "Quel herbier voulez vous sélectionner ?"
+        ACCEPT wSelectedHerbierId
+        
+        OPEN INPUT fher
+        MOVE 0 TO wNoHerbier
+        MOVE wSelectedHerbierId TO fh_id
+        READ fher
+        INVALID KEY 
+         DISPLAY "Cet herbier n'existe pas"
+         MOVE 1 TO wNoHerbier
+        NOT INVALID KEY 
+         DISPLAY "ID  | Nom de l'herbier               | Type de l'herb" 
+         "ier    | Date de création | ID de l'utilsateur  "
+         DISPLAY "----|--------------------------------|---------------"
+         "-------|------------------|---------------------"
+         DISPLAY fh_id, " | ", fh_nom, " | ", fh_type, " | ",
+         fh_date , " | ", fh_utilisateur
+         IF fh_utilisateur = wConnectedUser THEN
+          DISPLAY "Cet herbier peut être modifier"
+         ELSE 
+          DISPLAY "Cet herbier ne peut pas être modifier"
+         END-IF
+        END-READ
+        CLOSE fher.
   
 
-count_utilisateurs.
+       count_utilisateurs.
 *> Compte le nombre d'utilisateurs présents dans la fichier utilisateurs
 *> et stocke le résultat dans wUtilisateursCount. On en profite pour
 *> actualiser la valeur de wMaxUserId, qui sert pour l'insertion.
@@ -256,7 +453,7 @@ count_utilisateurs.
 
 
 
-add_default_user_if_first_start.
+       add_default_user_if_first_start.
 *> Ajoute l'utilisateur par défaut (cf readme.md) si aucun utilisateur
 *> n'est déjà présent dans le fichier
 *> 
