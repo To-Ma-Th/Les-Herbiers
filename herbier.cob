@@ -92,6 +92,10 @@ WORKING-STORAGE SECTION.
        77 CONST_HERBIER_LEAF PIC A(15).
        77 CONST_HERBIER_FLOWER PIC A(15).
        77 CONST_HERBIER_MIXTE PIC A(15).
+       77 CONST_SAISON_HIVER PIC A(15).
+       77 CONST_SAISON_PRINTEMPS PIC A(15).
+       77 CONST_SAISON_ETE PIC A(15).
+       77 CONST_SAISON_AUTOMNE PIC A(15).
 
        77 CONST_DISPLAY_MENU PIC A(30).
        77 CONST_ACTION_SENTENCE PIC A(38).
@@ -123,6 +127,16 @@ WORKING-STORAGE SECTION.
        77 wActionChosen PIC 9(1).
        77 wValidInput PIC 9(1).
        77 wExitFunction PIC 9(1).
+
+       77 wLastPlantId PIC 9(3).
+       77 wPlanteName PIC A(30).
+       77 wPlanteLatinName PIC A(45).
+       77 wTypePlante PIC A(15).
+       77 wHabitat PIC A(15).
+       77 wSaison PIC A(15).
+       77 wDuree PIC 9(2).
+       77 wUniquePlanteName PIC 9(1).
+       77 wUniquePlanteLatinName PIC 9(1).
         
         
 PROCEDURE DIVISION.
@@ -165,6 +179,10 @@ MOVE "Fleur" TO CONST_PLANT_FLOWER.
 MOVE "Feuille" TO CONST_HERBIER_LEAF.
 MOVE "Fleur" TO CONST_HERBIER_FLOWER.
 MOVE "Mixte" TO CONST_HERBIER_MIXTE.
+MOVE "Hiver" TO CONST_SAISON_HIVER.
+MOVE "Printemps" TO CONST_SAISON_PRINTEMPS.
+MOVE "Ete" TO CONST_SAISON_ETE.
+MOVE "Automne" TO CONST_SAISON_AUTOMNE.
 
 MOVE "------------------------------" TO CONST_DISPLAY_MENU.
 MOVE "Indiquez ce que vous souhaitez faire :" TO CONST_ACTION_SENTENCE.
@@ -174,20 +192,10 @@ MOVE 1 TO wIsAnonymous.
 
 *> Insertion automatique d'un untilisateur s'il n'y en a pas déjà
 PERFORM add_default_user_if_first_start.
-PERFORM last_herbier_id
+PERFORM last_herbier_id.
+PERFORM last_plante_id.
 
-MOVE fu_id TO wConnectedUser.
-PERFORM display_all_herbier.
-DISPLAY " ".
-PERFORM display_user_herbier.
-DISPLAY " ".
-PERFORM display_herbier_by_id.
-DISPLAY " ".
-MOVE 2 TO wConnectedUser.
-PERFORM display_user_herbier.
-DISPLAY " ".
-PERFORM display_herbier_by_id.
-DISPLAY " ".
+PERFORM add_plante.
 
 STOP RUN.
 
@@ -195,8 +203,8 @@ STOP RUN.
 
 
        last_herbier_id.
-*> Compte le nombre d'herbier présents dans la fichier herbier
-*> et stocke le résultat dans l_h_id
+*> Parcourt le fichier herbier à la recherche du plus grand id. Une fois
+*> trouvé, on le stocke dans l_h_id
 *>
 *> Variables utilisées :
 *> - l_h_id
@@ -208,7 +216,9 @@ STOP RUN.
            READ fher
            AT END MOVE 1 TO wEndOfFile
            NOT AT END
-               ADD 1 TO l_h_id
+               IF fh_id > l_h_id THEN
+                   MOVE fh_id TO l_h_id
+               END-IF
            END-READ
        END-PERFORM
        CLOSE fher.
@@ -218,9 +228,7 @@ STOP RUN.
 *> Permet d'ajouter un herbier dans le fichier herbier
 *> 
 *> Variables utilisées :
-*> - l_h_id
-       ADD 1 TO l_h_id
-       MOVE l_h_id TO fh_id 
+*> - l_h_id 
        DISPLAY "Nom de l'herbier ?"
        ACCEPT fh_nom
        MOVE wConnectedUser TO fh_utilisateur
@@ -232,6 +240,8 @@ STOP RUN.
            DISPLAY "Feuille/Fleur/Mixte (attention à la majuscule)"
            ACCEPT fh_type
        END-PERFORM
+       ADD 1 TO l_h_id
+       MOVE l_h_id TO fh_id
        OPEN I-O fher
        WRITE tamp_fher
        END-WRITE
@@ -1149,4 +1159,204 @@ STOP RUN.
                ADD -1 TO wUtilisateursCount
            END-READ
            CLOSE futil
+       END-IF.
+
+       last_plante_id.
+*> Parcourt le fichier plante à la recherche du plus grand id. Une fois
+*> trouvé, on le stocke dans wLastPlantId
+*>
+*> Variables utilisées :
+*> - wLastPlantId
+*> - wEndOfFile
+*>
+*> Nombre de lectures : autant qu'il y a de plantes dans le fichier
+*> plante.
+       OPEN INPUT fplan
+       MOVE 0 TO wEndOfFile
+       MOVE 0 TO wLastPlantId
+       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+           READ fplan
+           AT END MOVE 1 TO wEndOfFile
+           NOT AT END
+               IF pl_id > wLastPlantId THEN
+                   MOVE pl_id TO wLastPlantId
+               END-IF
+           END-READ
+       END-PERFORM
+       CLOSE fher.
+
+       check_unique_plante_name.
+*> Vérifie que le nom de plante dans wPlanteName est unique. Le résultat
+*> est stocké dans wUniquePlanteName
+*>
+*> Variables utilisées :
+*> - wUniquePlanteName
+*> - wPlanteName
+*>
+*> Nombre de lectures : 1
+       MOVE 0 TO wUniquePlanteName
+       MOVE wPlanteName TO pl_nom
+
+       OPEN INPUT fplan
+       READ fplan
+       KEY IS pl_nom
+           INVALID KEY     MOVE 1 TO wUniquePlanteName
+       END-READ
+       CLOSE fplan.
+
+       check_unique_plante_latin_name.
+*> Vérifie que le nom latin de plante dans wPlanteLatinName est unique.
+*> Le résultat est stocké dans wUniquePlanteLatinName
+*>
+*> Variables utilisées :
+*> - wUniquePlanteLatinName
+*> - wPlanteLatinName
+*>
+*> Nombre de lectures : 1
+       MOVE 0 TO wUniquePlanteLatinName
+       MOVE wPlanteLatinName TO pl_nomLatin
+
+       OPEN INPUT fplan
+       READ fplan
+       KEY IS pl_nomLatin
+           INVALID KEY     MOVE 1 TO wUniquePlanteLatinName
+       END-READ
+       CLOSE fplan.
+
+       keep_going.
+*> Demande à l'utilisateur s'il souhaite continuer l'action qu'il a
+*> commencée ou non. Si il choisit de retourner en arrière,
+*> wExitFunction prendra la valeur 1, et il faudra le précipiter vers
+*> la sortie de la fonction.
+*>
+*> Variables utilisées :
+*> wActionChosen
+*> wExitFunction
+*>
+*> Nombre de lectures : aucune
+       PERFORM WITH TEST AFTER UNTIL wActionChosen < 2
+                                 AND wActionChosen >= 0
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+           DISPLAY "        1 : réessayer"
+           DISPLAY " "
+           DISPLAY "        0 : retour en arrière"
+           DISPLAY " "
+    
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       IF wActionChosen = 0 THEN
+           MOVE 1 TO wExitFunction
+       END-IF.
+
+       add_plante.
+*> Permet d'ajouter une plante dans le fichier plante
+*> 
+*> Variables utilisées :
+*> - wUniquePlanteName
+*> - wUniquePlanteLatinName
+*> - wTypePlante
+*> - wSaison
+*> - wDuree
+*> - wExitFunction
+*> - wPlanteName
+*> - wPlanteLatinName
+*> - wActionChosen
+*> - wHabitat
+*> - wLastPlantId
+*>
+*> Nombre de lectures : aucune
+       MOVE 1 TO wUniquePlanteName
+       MOVE 1 TO wUniquePlanteLatinName
+       MOVE CONST_SAISON_HIVER TO wSaison
+       MOVE CONST_PLANT_LEAF TO wTypePlante
+       MOVE 0 TO wExitFunction
+       PERFORM WITH TEST AFTER UNTIL wUniquePlanteName = 1
+                                  OR wExitFunction = 1
+           IF wUniquePlanteName = 0 THEN
+               DISPLAY "Ce nom de plante existe déjà."
+               DISPLAY " "
+               PERFORM keep_going
+           END-IF
+
+           IF NOT wExitFunction = 1 THEN
+               DISPLAY "Veuillez saisir le nom de votre plante"
+               ACCEPT wPlanteName
+               PERFORM check_unique_plante_name
+           END-IF
+       END-PERFORM
+
+       IF NOT wExitFunction = 1 THEN
+           PERFORM WITH TEST AFTER UNTIL wUniquePlanteLatinName = 1
+                                      OR wExitFunction = 1
+               IF wUniquePlanteLatinName = 0 THEN
+                   DISPLAY "Ce nom latin de plante existe déjà."
+                   DISPLAY " "
+                   PERFORM keep_going
+               END-IF
+    
+               IF NOT wExitFunction = 1 THEN
+                   DISPLAY "Veuillez saisir le nom latin de votre ",
+                           "plante"
+                   ACCEPT wPlanteLatinName
+                   PERFORM check_unique_plante_latin_name
+               END-IF
+           END-PERFORM
+       END-IF
+
+       IF NOT wExitFunction = 1 THEN
+           PERFORM WITH TEST AFTER UNTIL wTypePlante = CONST_PLANT_LEAF
+                                    OR wTypePlante = CONST_PLANT_FLOWER
+               IF NOT wTypePlante = CONST_PLANT_LEAF AND
+                  NOT wTypePlante = CONST_PLANT_FLOWER
+               THEN
+                   DISPLAY "Type incorrect."
+               END-IF
+
+               DISPLAY "Veuillez saisir s'il s'agit d'une ",
+                       CONST_PLANT_FLOWER, " ou d'une ",
+                       CONST_PLANT_LEAF, " (attention à la majuscule)"
+               ACCEPT wTypePlante
+           END-PERFORM
+           
+           DISPLAY "Quel est l'habitat naturel de la plante ? (désert,", 
+                   " montagne, prairies, forêt, tropiques...)"
+           ACCEPT wHabitat
+
+           PERFORM WITH TEST AFTER UNTIL wSaison = CONST_SAISON_HIVER
+                                     OR wSaison = CONST_SAISON_PRINTEMPS
+                                      OR wSaison = CONST_SAISON_ETE
+                                      OR wSaison = CONST_SAISON_AUTOMNE
+               IF NOT wSaison = CONST_SAISON_HIVER AND
+                  NOT wSaison = CONST_SAISON_PRINTEMPS AND
+                  NOT wSaison = CONST_SAISON_ETE AND
+                  NOT wSaison = CONST_SAISON_AUTOMNE
+               THEN
+                   DISPLAY "Saison incorrecte."
+               END-IF
+
+               DISPLAY "Veuillez entrez la saison associée à votre ",
+                       "plante."
+               DISPLAY "Pour une fleur, entrez la saison à laquelle la",
+                       " plante fleurit. Poue une feuille, entrez la",
+                       " saison à laquelle on en voit les premier",
+                       " plants émerger."
+               DISPLAY CONST_SAISON_HIVER, "/", CONST_SAISON_PRINTEMPS,
+                       "/", CONST_SAISON_ETE, "/", CONST_SAISON_AUTOMNE,
+                       " (attention à la majuscule et aux accents)"
+               ACCEPT wSaison
+           END-PERFORM
+
+           DISPLAY "Quel est la durée de séchage recommendée (en jours",
+                   ") pour la plante ?"
+           ACCEPT wDuree
+
+           ADD 1 TO wLastPlantId
+           MOVE wLastPlantId TO pl_id
+           OPEN I-O fplan
+           WRITE tamp_fplan
+           END-WRITE
+           CLOSE fplan
        END-IF.
