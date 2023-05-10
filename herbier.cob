@@ -10,6 +10,7 @@ FILE-CONTROL.
        record key is pl_id
        alternate record key is pl_nom
        alternate record key is pl_nomLatin
+       ALTERNATE RECORD KEY IS pl_type WITH DUPLICATES
        alternate record key is pl_saison WITH DUPLICATES
        file status is cr_fplan.
 
@@ -53,12 +54,12 @@ FD fplan.
            02 pl_type PIC A(15).
                 
 FD fher.
-        01 tamp_fher.
-                02 fh_id PIC 9(3).
-                02 fh_nom PIC A(30).
-                02 fh_utilisateur PIC 9(3).
-                02 fh_date PIC A(15).
-                02 fh_type PIC A(20).
+       01 tamp_fher.
+           02 fh_id PIC 9(3).
+           02 fh_nom PIC A(30).
+           02 fh_utilisateur PIC 9(3).
+           02 fh_date PIC A(15).
+           02 fh_type PIC A(20).
               
 FD futil.
        01 tamp_futil.
@@ -195,7 +196,11 @@ PERFORM add_default_user_if_first_start.
 PERFORM last_herbier_id.
 PERFORM last_plante_id.
 
-PERFORM add_plante.
+PERFORM display_plantes.
+MOVE CONST_PLANT_FLOWER TO wTypePlante.
+PERFORM display_plantes_type.
+MOVE CONST_PLANT_LEAF TO wTypePlante.
+PERFORM display_plantes_type.
 
 STOP RUN.
 
@@ -1183,7 +1188,7 @@ STOP RUN.
                END-IF
            END-READ
        END-PERFORM
-       CLOSE fher.
+       CLOSE fplan.
 
        check_unique_plante_name.
 *> Vérifie que le nom de plante dans wPlanteName est unique. Le résultat
@@ -1315,9 +1320,10 @@ STOP RUN.
                    DISPLAY "Type incorrect."
                END-IF
 
-               DISPLAY "Veuillez saisir s'il s'agit d'une ",
-                       CONST_PLANT_FLOWER, " ou d'une ",
-                       CONST_PLANT_LEAF, " (attention à la majuscule)"
+               DISPLAY "Veuillez saisir le type de plante dont il ",
+                       "s'agit."
+               DISPLAY CONST_PLANT_FLOWER, CONST_PLANT_LEAF, 
+                       " (attention à la majuscule)"
                ACCEPT wTypePlante
            END-PERFORM
            
@@ -1343,8 +1349,8 @@ STOP RUN.
                        " plante fleurit. Poue une feuille, entrez la",
                        " saison à laquelle on en voit les premier",
                        " plants émerger."
-               DISPLAY CONST_SAISON_HIVER, "/", CONST_SAISON_PRINTEMPS,
-                       "/", CONST_SAISON_ETE, "/", CONST_SAISON_AUTOMNE,
+               DISPLAY CONST_SAISON_HIVER, CONST_SAISON_PRINTEMPS,
+                       CONST_SAISON_ETE, CONST_SAISON_AUTOMNE,
                        " (attention à la majuscule et aux accents)"
                ACCEPT wSaison
            END-PERFORM
@@ -1355,8 +1361,97 @@ STOP RUN.
 
            ADD 1 TO wLastPlantId
            MOVE wLastPlantId TO pl_id
+           MOVE wPlanteName TO pl_nom
+           MOVE wPlanteLatinName TO pl_nomLatin
+           MOVE wTypePlante TO pl_type
+           MOVE wHabitat TO pl_habitat
+           MOVE wSaison TO pl_saison
+           MOVE wDuree TO pl_duree
+
            OPEN I-O fplan
            WRITE tamp_fplan
            END-WRITE
            CLOSE fplan
        END-IF.
+
+       display_plantes_table_header.
+*> Simple fonction d'affichage pour mutualiser l'impression de l'en-tête
+*> de table d'affichage pour les plantes
+*>
+*> Variables utilisées : aucune
+*>
+*> Nombre de lectures : aucune
+       DISPLAY "ID  | Nom                            | ",
+               "Nom latin                                     | ",
+               "Type            | Habitat naturel | Saison          | ",
+               "Durée de séchage"
+       DISPLAY "----|--------------------------------|-",
+               "----------------------------------------------|-",
+               "----------------|-----------------|-----------------|-",
+               "----------------".
+
+       display_plantes_table_line.
+*> Simple fonction d'affichage pour mutualiser l'impression des lignes
+*> de table d'affichage pour les plantes
+*>
+*> Variables utilisées : aucune
+*>
+*> Nombre de lectures : aucune
+       DISPLAY pl_id, " | ", pl_nom, " | ", pl_nomLatin, " | ",
+               pl_type, " | ", pl_habitat, " | ", pl_saison, " | ",
+               pl_duree, " jours".
+
+       display_plantes.
+*> Affiche sous la forme d'une table les plantes de l'application
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+*>
+*> Nombre de lectures : Autant qu'il y a de plantes dans l'appli
+       MOVE 0 TO wEndOfFile
+
+       PERFORM display_plantes_table_header
+
+       OPEN INPUT fplan
+       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+           READ fplan
+           AT END          MOVE 1 TO wEndOfFile
+           NOT AT END
+               PERFORM display_plantes_table_line
+           END-READ
+       END-PERFORM
+       CLOSE fplan.
+
+       display_plantes_type.
+*> Affiche sous la forme d'une table les plantes de l'application dont
+*> le type correspond à celui dans wTypePlante
+*>
+*> Variables utilisées :
+*> - wTypePlante
+*> - wEndOfFile
+*>
+*> Nombre de lectures : autant qu'il y a de plantes du type donné dans
+*> le fichier plante
+       MOVE 0 TO wEndOfFile
+       MOVE wTypePlante TO pl_type
+
+       
+       OPEN INPUT fplan
+       START fplan, KEY IS = pl_type
+       INVALID KEY
+           DISPLAY "Aucune plante pour le type cherché"
+       NOT INVALID KEY
+           PERFORM display_plantes_table_header
+           PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+               READ fplan NEXT
+               AT END      MOVE 1 TO wEndOfFile
+               NOT AT END
+                   IF pl_type = wTypePlante THEN
+                       PERFORM display_plantes_table_line
+                   ELSE
+                       MOVE 1 TO wEndOfFile
+                   END-IF
+               END-READ
+           END-PERFORM
+       END-START
+       CLOSE fplan.
