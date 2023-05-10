@@ -4,41 +4,41 @@ PROGRAM-ID. Herbier.
 ENVIRONMENT DIVISION.
 INPUT-OUTPUT SECTION.
 FILE-CONTROL. 
-       select fplan assign to "plante.dat"
-       organization indexed
-       access mode is dynamic
-       record key is pl_id
-       alternate record key is pl_nom
-       alternate record key is pl_nomLatin
+       SELECT fplan ASSIGN TO "plante.dat"
+       ORGANIZATION INDEXED
+       ACCESS MODE IS DYNAMIC
+       RECORD KEY IS pl_id
+       ALTERNATE RECORD KEY IS pl_nom
+       ALTERNATE RECORD KEY IS pl_nomLatin
        ALTERNATE RECORD KEY IS pl_type WITH DUPLICATES
-       alternate record key is pl_saison WITH DUPLICATES
-       file status is cr_fplan.
+       ALTERNATE RECORD KEY IS pl_saison WITH DUPLICATES
+       FILE STATUS IS cr_fplan.
 
-       select fher assign to "herbier.dat"
-       organization indexed
-       access mode is dynamic
-       record key is fh_id
-       alternate record key is fh_utilisateur WITH DUPLICATES
-       alternate record key is fh_type WITH DUPLICATES
-       file status is cr_fher.
+       SELECT fher ASSIGN TO "herbier.dat"
+       ORGANIZATION INDEXED
+       ACCESS MODE IS DYNAMIC
+       RECORD KEY IS fh_id
+       ALTERNATE RECORD KEY IS fh_utilisateur WITH DUPLICATES
+       ALTERNATE RECORD KEY IS fh_type WITH DUPLICATES
+       FILE STATUS IS cr_fher.
 
-       select futil assign to "utilsateur.dat"
-       organization indexed
-       access mode is dynamic
-       record key is fu_id
-       alternate record key is fu_login
-       alternate record key is fu_role WITH DUPLICATES
-       alternate record key is fu_type WITH DUPLICATES
-       file status is cr_futil.
+       SELECT futil ASSIGN TO "utilsateur.dat"
+       ORGANIZATION INDEXED
+       ACCESS MODE IS DYNAMIC
+       RECORD KEY IS fu_id
+       ALTERNATE RECORD KEY IS fu_login
+       ALTERNATE RECORD KEY IS fu_role WITH DUPLICATES
+       ALTERNATE RECORD KEY IS fu_type WITH DUPLICATES
+       FILE STATUS IS cr_futil.
 
-       select fhpl assign to "herbier_plante.dat"
-       organization indexed
-       access mode is dynamic
-       record key is fhpl_id
-       alternate record key is fhpl_lieu WITH DUPLICATES
-       alternate record key is fhpl_idHerbier WITH DUPLICATES
-       alternate record key is fhpl_idPlante WITH DUPLICATES
-       file status is cr_fhpl.
+       SELECT fhpl ASSIGN TO "herbier_plante.dat"
+       ORGANIZATION INDEXED
+       ACCESS MODE IS DYNAMIC
+       RECORD KEY IS fhpl_id
+       ALTERNATE RECORD KEY IS fhpl_lieu WITH DUPLICATES
+       ALTERNATE RECORD KEY IS fhpl_idHerbier WITH DUPLICATES
+       ALTERNATE RECORD KEY IS fhpl_idPlante WITH DUPLICATES
+       FILE STATUS IS cr_fhpl.
 
 
 DATA DIVISION.
@@ -196,11 +196,7 @@ PERFORM add_default_user_if_first_start.
 PERFORM last_herbier_id.
 PERFORM last_plante_id.
 
-PERFORM display_plantes.
-MOVE CONST_PLANT_FLOWER TO wTypePlante.
-PERFORM display_plantes_type.
-MOVE CONST_PLANT_LEAF TO wTypePlante.
-PERFORM display_plantes_type.
+
 
 STOP RUN.
 
