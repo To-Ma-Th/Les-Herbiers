@@ -138,6 +138,8 @@ WORKING-STORAGE SECTION.
        77 wDuree PIC 9(2).
        77 wUniquePlanteName PIC 9(1).
        77 wUniquePlanteLatinName PIC 9(1).
+       77 wNoPlante PIC 9(1).
+       77 wSelectedplanteId PIC 9(3).
         
         
 PROCEDURE DIVISION.
@@ -256,7 +258,7 @@ STOP RUN.
        OPEN I-O fhpl
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoHerbier
-       MOVE wSelectedHerbierId TO fhpl_id
+       MOVE wSelectedHerbierId TO fhpl_idHerbier
        START fhpl, KEY IS = fhpl_id
        INVALID KEY     MOVE 1 TO wNoHerbier
        NOT INVALID KEY
@@ -506,8 +508,8 @@ STOP RUN.
 
        PERFORM WITH TEST AFTER UNTIL wLoginTrialsCount = 3
                               OR NOT wConnectedUser = 0
-          *> On déconnecte l'utilisateur (à voir si on garde cette
-          *> étape)
+      *> On déconnecte l'utilisateur (à voir si on garde cette
+      *> étape)
            MOVE 0 TO wConnectedUser
            ADD 1 TO wLoginTrialsCount
 
@@ -518,8 +520,8 @@ STOP RUN.
            ACCEPT fu_login
            ACCEPT wPassword
      
-          *> On cherche l'utilisateur pour voir s'il existe, si oui on 
-          *> regarde si le mot de passe correspond.
+   *> On cherche l'utilisateur pour voir s'il existe, si oui on 
+   *> regarde si le mot de passe correspond.
            OPEN INPUT futil
            READ futil
            KEY IS fu_login
@@ -529,8 +531,8 @@ STOP RUN.
 
            IF NOT wConnectedUser = 0 AND NOT wPassword = fu_mdp
                OR fu_role = CONST_ROLE_WAITING THEN
-              *> Mot de passe incorrect ou utilisateur pas encore validé
-              *> -> on repasse à 0
+      *> Mot de passe incorrect ou utilisateur pas encore validé
+      *> -> on repasse à 0
                MOVE 0 TO wConnectedUser
            END-IF
        END-PERFORM
@@ -562,8 +564,8 @@ STOP RUN.
            IF NOT fu_role = CONST_ROLE_WAITING THEN
                MOVE 0 TO wIsAnonymous
            ELSE
-              *> On a détecté un cas qui ne devrait pas arriver, alors
-              *> on ferme la connexion par précaution.
+      *> On a détecté un cas qui ne devrait pas arriver, alors
+      *> on ferme la connexion par précaution.
                MOVE 0 TO wConnectedUser
            END-IF
        END-READ
@@ -1068,7 +1070,7 @@ STOP RUN.
                    DISPLAY CONST_ACTION_IMPOSSIBLE
                END-IF
 
-               DISPLAY "Entrez le nouveau rôle (", CONST_ROLE_EDITOR, "/",
+              DISPLAY "Entrez le nouveau rôle (", CONST_ROLE_EDITOR, "/",
                        CONST_ROLE_ADMIN, ") :"
                ACCEPT fu_role
            END-PERFORM
@@ -1450,4 +1452,201 @@ STOP RUN.
                END-READ
            END-PERFORM
        END-START
+       CLOSE fplan.
+       
+       update_plante.
+*> Permet de supprimer une plante dans le fichier plante
+*> 
+*> Variables utilisées :
+*> - wLastPlantId
+
+       MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY "Choix impossible"
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier le nom de ",
+                   "la plante ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+       
+       IF wActionChosen = 1 THEN
+           MOVE 1 TO wUniquePlanteName
+           MOVE 0 TO wExitFunction
+           PERFORM WITH TEST AFTER UNTIL wUniquePlanteName = 1
+                                          OR wExitFunction = 1
+                IF wUniquePlanteName = 0 THEN
+                       DISPLAY "Ce nom de plante existe déjà."
+                       DISPLAY " "
+                       PERFORM keep_going
+                   END-IF
+
+                   IF NOT wExitFunction = 1 THEN
+                       DISPLAY "Veuillez saisir le nom de votre plante"
+                       ACCEPT wPlanteName
+                       PERFORM check_unique_plante_name
+                   END-IF
+          END-PERFORM
+       END-IF
+        
+       MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY "Choix impossible"
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier le nom latin de ",
+                   "la plante ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+       
+        IF wActionChosen = 1 THEN
+           MOVE 1 TO wUniquePlanteLatinName
+           MOVE 0 TO wExitFunction
+           IF NOT wExitFunction = 1 THEN
+            PERFORM WITH TEST AFTER UNTIL wUniquePlanteLatinName = 1
+                                      OR wExitFunction = 1
+               IF wUniquePlanteLatinName = 0 THEN
+                   DISPLAY "Ce nom latin de plante existe déjà."
+                   DISPLAY " "
+                   PERFORM keep_going
+               END-IF
+    
+               IF NOT wExitFunction = 1 THEN
+                   DISPLAY "Veuillez saisir le nom latin de votre ",
+                           "plante"
+                   ACCEPT wPlanteLatinName
+                   PERFORM check_unique_plante_latin_name
+               END-IF
+           END-PERFORM
+         END-IF
+       END-IF
+       
+       MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY "Choix impossible"
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier l'habitat de ",
+                   "la plante ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+       
+        IF wActionChosen = 1 THEN
+           DISPLAY "Entrez le nouvel habitat :"
+           ACCEPT pl_habitat
+       END-IF
+        
+        MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY "Choix impossible"
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier la saison de ",
+                   "la plante ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+       
+        IF wActionChosen = 1 THEN
+           DISPLAY "Entrez la nouvelle saison :"
+           ACCEPT pl_saison
+       END-IF
+       
+       MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY "Choix impossible"
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier la durée de ",
+                   "séchage la plante ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+       
+        IF wActionChosen = 1 THEN
+           DISPLAY "Entrez la nouvelle durée de séchage :"
+           ACCEPT pl_duree
+       END-IF
+       
+       MOVE 0 TO wActionChosen
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 2
+           
+           IF wActionChosen < 0 OR wActionChosen > 2 THEN
+               DISPLAY "Choix impossible"
+           END-IF
+
+           DISPLAY "Souhaitez-vous modifier le type de ",
+                   "la plante ? (0 : non, 1 : oui)"
+           ACCEPT wActionChosen
+       END-PERFORM
+       
+       IF wActionChosen = 1 THEN
+           PERFORM WITH TEST AFTER UNTIL pl_type = CONST_PLANT_LEAF
+                   OR pl_type = CONST_PLANT_FLOWER
+               DISPLAY "Type de l'herbier"
+               DISPLAY "Feuille/Fleur (attention à la majuscule)"
+               ACCEPT pl_type
+           END-PERFORM
+       END-IF
+       
+       MOVE wPlanteName TO pl_nom
+       MOVE wPlanteLatinName TO pl_nomLatin
+        
+       OPEN I-O fplan
+       READ fplan
+       NOT INVALID KEY     REWRITE tamp_fplan
+       END-READ
+       CLOSE fplan.
+       
+       delete_plante.
+*> Permet de supprimer une plante dans le fichier plante
+*> 
+*> Variables utilisées :
+*> - l_h_id          
+       OPEN I-O fhpl
+       MOVE 0 TO wEndOfFile
+       MOVE 0 TO wNoPlante
+       MOVE wSelectedPlanteId TO fhpl_idPlante
+       START fhpl, KEY IS = fhpl_idPlante
+       INVALID KEY     MOVE 1 TO wNoPlante
+       NOT INVALID KEY
+           PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+               READ fhpl NEXT
+               AT END      MOVE 1 TO wEndOfFile
+               NOT AT END 
+                   IF fhpl_idPlante = wSelectedPlanteId THEN
+                       DELETE fhpl RECORD
+                   ELSE
+                       MOVE 1 TO wEndOfFile
+                   END-IF
+               END-READ
+           END-PERFORM
+       END-START
+       CLOSE fhpl
+         
+       OPEN I-O fplan
+       MOVE 0 TO wNoPlante
+       MOVE wSelectedPlanteId TO pl_id
+       READ fplan
+       INVALID KEY 
+           DISPLAY "Cette plante n'existe pas"
+           MOVE 1 TO wNoPlante
+       NOT INVALID KEY 
+           ADD -1 TO wLastPlantId
+           DELETE fplan RECORD
+       END-READ
        CLOSE fplan.
