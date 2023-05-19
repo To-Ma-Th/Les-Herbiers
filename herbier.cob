@@ -218,9 +218,11 @@ MOVE 1 TO wIsAnonymous.
 
 *> Insertion automatique d'un untilisateur s'il n'y en a pas déjà
 PERFORM add_default_user_if_first_start.
+*> Récupération des derniers identifiant de chaque fichier
 PERFORM last_herbier_id.
 PERFORM last_plante_id.
 PERFORM last_herbier_plante_id.
+*> Appel du menu général
 PERFORM display_global_menu.
 
 STOP RUN.
@@ -259,6 +261,7 @@ STOP RUN.
 *> Variables utilisées :
 *> - l_h_id
 *> - wHerbierCount
+*> - wConnectedUser
        DISPLAY "Nom de l'herbier ?"
        ACCEPT fh_nom
        MOVE wConnectedUser TO fh_utilisateur
@@ -284,6 +287,10 @@ STOP RUN.
 *> Variables utilisées :
 *> - l_h_id
 *> - wHerbierCount
+*> - wEndOfFile
+*> - wNoHerbier
+*> - wSelectedHerbierId
+*> - wNoHerbier
        OPEN I-O fhpl
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoHerbier
@@ -416,7 +423,8 @@ STOP RUN.
 *>
 *> Variables utilisées :
 *> - wEndOfFile
-*> - wConnectedUser        
+*> - wConnectedUser    
+*> - wNoHerbier    
        OPEN INPUT fher
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoHerbier
@@ -449,7 +457,7 @@ STOP RUN.
 *> id
 *>
 *> Variables utilisées :
-*> - wEndOfFile
+*> - wNoHerbier
 *> - wSelectedHerbierId 
 *> - wConnectedUser           
        PERFORM display_all_herbier
@@ -482,13 +490,13 @@ STOP RUN.
        
        display_admin_herbier_menu.
 *> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*> lorsque l'administrateur est connecté et veux consulter les herbiers.
 *>
 *> Variables utilisées :
 *> - wActionChosen
 *> - wIsAnonymous
 *> - wConnectedUserRole
-*>
+*> - wAvgHerbierByUser
 *> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
 
@@ -504,17 +512,19 @@ STOP RUN.
 
            
            IF wIsAnonymous = 0 THEN
-             DISPLAY CONST_ACTION_SENTENCE
-             DISPLAY " "
+             IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
+               DISPLAY CONST_ACTION_SENTENCE
+               DISPLAY " "
 		
-             DISPLAY "        1 : consulter les herbiers"
-             DISPLAY "        2 : supprimer un herbier"
-             DISPLAY "        3 : gérer un herbier"
-             DISPLAY "        4 : consulter statistique"
+               DISPLAY "        1 : consulter les herbiers"
+               DISPLAY "        2 : supprimer un herbier"
+               DISPLAY "        3 : gérer un herbier"
+               DISPLAY "        4 : consulter statistique"
            
-             DISPLAY " "
-             DISPLAY "        0 : retourner au menu"
-             DISPLAY " "
+               DISPLAY " "
+               DISPLAY "        0 : retourner au menu"
+               DISPLAY " "
+             END-IF
            ELSE
              PERFORM display_global_menu
            END-IF
@@ -553,7 +563,6 @@ STOP RUN.
 *> Variables utilisées :
 *> - wActionChosen
 *> - wIsAnonymous
-*> - wConnectedUserRole
 *>
 *> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
@@ -606,13 +615,13 @@ STOP RUN.
        END-EVALUATE.
        
        display_plante_herbier_utilisateur.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*> Fonction qui permet de sélectionner un herbier d'un
+*> utilisateur puis d'afficher toutes les plantes contenu dedans
 *>
 *> Variables utilisées :
-*> - wActionChosen
-*> - wIsAnonymous
-*> - wConnectedUserRole
+*> - wNoHerbier
+*> - wSelectedHerbierId
+*> - wHerbierUpdate
 *>
 *> Nombre de lectures : aucune       
        PERFORM display_user_herbier
@@ -628,17 +637,20 @@ STOP RUN.
            END-IF
           END-PERFORM
           DISPLAY " "
-          PERFORM display_herbier_by_id
+          PERFORM display_herbier_plantes
        END-IF.
        
        display_update_herbier_utilisateur.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*> Fonction qui affiche qui permet de sélectionner un herbier d'un
+*> utilisateur puis d'afficher un menu qui pour modifier les infos
+*> de l'herbier, ajouter ou supprimer une plante de l'herbier ou 
+*> supprimer l'herbier
 *>
 *> Variables utilisées :
+*> - wNoHerbier
+*> - wHerbierUpdate
+*> - wSelectedHerbierId
 *> - wActionChosen
-*> - wIsAnonymous
-*> - wConnectedUserRole
 *>
 *> Nombre de lectures : aucune
        PERFORM display_user_herbier
@@ -710,13 +722,14 @@ STOP RUN.
        END-IF.
        
        delete_herbier_menu.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*> Fonction qui permet de sélectionner un herbier d'un utilisateur
+*> puis de le supprime
 *>
 *> Variables utilisées :
+*> - wNoHerbier
+*> - wHerbierUpdate
 *> - wActionChosen
-*> - wIsAnonymous
-*> - wConnectedUserRole
+*> - wSelectedHerbierId
 *>
 *> Nombre de lectures : aucune       
        PERFORM display_user_herbier
@@ -745,13 +758,13 @@ STOP RUN.
        END-IF.
        
        delete_herbier_menu_admin.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*> Fonction qui permet de sélectionner un herbier d'un utilisateur
+*> puis de le supprime, pour les administrateurs
 *>
 *> Variables utilisées :
+*> - wNoHerbier
 *> - wActionChosen
-*> - wIsAnonymous
-*> - wConnectedUserRole
+*> - wSelectedHerbierId
 *>
 *> Nombre de lectures : aucune       
        PERFORM display_all_herbier
@@ -778,13 +791,16 @@ STOP RUN.
        END-IF.
        
        display_update_herbier_admin.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*> Fonction qui affiche qui permet de sélectionner un herbier d'un
+*> utilisateur puis d'afficher un menu qui pour modifier les infos
+*> de l'herbier, ajouter ou supprimer une plante de l'herbier ou 
+*> supprimer l'herbier, pour les administrateurs
 *>
 *> Variables utilisées :
 *> - wActionChosen
 *> - wIsAnonymous
 *> - wConnectedUserRole
+*> - wSelectedHerbierId
 *>
 *> Nombre de lectures : aucune
        PERFORM display_all_herbier
@@ -852,13 +868,14 @@ STOP RUN.
        END-IF.
        
        check_herbier_be_update.
-*> Permet d'afficher toutes les infos d'un herbier en fonction de son
-*> id
+*> Permet de vérifier si l'herbier selectionné peut être modifier par
+*> l'utilisateur
 *>
 *> Variables utilisées :
-*> - wEndOfFile
+*> - wConnectedUser
 *> - wSelectedHerbierId 
-*> - wConnectedUser           
+*> - wNoHerbier  
+*> - wHerbierUpdate         
         
        OPEN INPUT fher
        MOVE 0 TO wNoHerbier
