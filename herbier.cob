@@ -135,6 +135,7 @@ WORKING-STORAGE SECTION.
        77 wExitFunction PIC 9(1).
        77 wInsertionPlante PIC 9(1).
        77 wDeletePlante PIC 9(1).
+       77 wHerbierUpdate PIC 9(1).
 
        77 wLastPlantId PIC 9(3).
        77 wPlanteName PIC A(30).
@@ -220,6 +221,7 @@ PERFORM add_default_user_if_first_start.
 PERFORM last_herbier_id.
 PERFORM last_plante_id.
 PERFORM last_herbier_plante_id.
+PERFORM display_global_menu.
 
 STOP RUN.
 
@@ -388,21 +390,25 @@ STOP RUN.
 *>
 *> Variables utilisées :
 *> - wEndOfFile
-       OPEN INPUT fher
-       MOVE 0 TO wEndOfFile
-       DISPLAY "ID  | Nom de l'herbier               | ",
+       IF l_h_id = 0 THEN
+          DISPLAY "Aucun herbier"
+       ELSE
+           OPEN INPUT fher
+           MOVE 0 TO wEndOfFile
+           DISPLAY "ID  | Nom de l'herbier               | ",
                "Type de l'herbier    | ID de l'utilsateur "
-       DISPLAY "----|--------------------------------|-",
+           DISPLAY "----|--------------------------------|-",
                "---------------------|--------------------"
-       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
-           READ fher
-           AT END      MOVE 1 TO wEndOfFile
-           NOT AT END 
-               DISPLAY fh_id, " | ", fh_nom, " | ", fh_type, " | ",
+           PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+               READ fher
+               AT END      MOVE 1 TO wEndOfFile
+               NOT AT END 
+                  DISPLAY fh_id, " | ", fh_nom, " | ", fh_type, " | ",
                        fh_utilisateur
-           END-READ
-       END-PERFORM
-       CLOSE fher.
+               END-READ
+           END-PERFORM
+           CLOSE fher
+       END-IF.
         
        display_user_herbier.
 *> Permet d'afficher l'id, le nom et le type des herbiers de
@@ -473,7 +479,402 @@ STOP RUN.
            END-IF
        END-READ
        CLOSE fher.
+       
+       display_admin_herbier_menu.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 5
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 4 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           
+           IF wIsAnonymous = 0 THEN
+             DISPLAY CONST_ACTION_SENTENCE
+             DISPLAY " "
+		
+             DISPLAY "        1 : consulter les herbiers"
+             DISPLAY "        2 : supprimer un herbier"
+             DISPLAY "        3 : gérer un herbier"
+             DISPLAY "        4 : consulter statistique"
+           
+             DISPLAY " "
+             DISPLAY "        0 : retourner au menu"
+             DISPLAY " "
+           ELSE
+             PERFORM display_global_menu
+           END-IF
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+*> retour au menu global
+          PERFORM display_global_menu
+       WHEN 1
+ *> consulter les herbiers
+         PERFORM display_all_herbier
+         PERFORM display_herbier_menu
+       WHEN 2
+ *> supprimer un herbier
+           PERFORM delete_herbier_menu_admin
+           PERFORM display_herbier_menu
+       WHEN 3
+ *> gérer un herbier
+           PERFORM display_update_herbier_admin
+           PERFORM display_herbier_menu
+       WHEN 4
+ *> statistique 
+           PERFORM display_update_herbier_admin
+           PERFORM display_herbier_menu
+       END-EVALUATE.
+       
+       display_herbier_menu.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 4
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 3 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           
+           IF wIsAnonymous = 0 THEN
+             DISPLAY CONST_ACTION_SENTENCE
+             DISPLAY " "
+		
+             DISPLAY "        1 : consulter ses herbiers"
+             DISPLAY "        2 : consulter les plantes d'un herbier"
+             DISPLAY "        3 : gérer un herbier"
+           
+             DISPLAY " "
+             DISPLAY "        0 : retourner au menu"
+             DISPLAY " "
+           ELSE
+             PERFORM display_global_menu
+           END-IF
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+*> retour au menu global
+          PERFORM display_global_menu
+       WHEN 1
+ *> consulter ses herbiers
+         PERFORM display_user_herbier
+         PERFORM display_herbier_menu
+       WHEN 2
+ *> consulter les plantes d'un herbier
+           PERFORM display_plante_herbier_utilisateur
+           PERFORM display_herbier_menu
+       WHEN 3
+ *> gérer un herbier
+           PERFORM display_update_herbier_utilisateur
+           PERFORM display_herbier_menu
+       END-EVALUATE.
+       
+       display_plante_herbier_utilisateur.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune       
+       PERFORM display_user_herbier
+       IF wNoHerbier = 0 THEN
+       
+          PERFORM WITH TEST AFTER UNTIL wHerbierUpdate = 1
+                                 
+           DISPLAY "Quel identifiant herbier souhaitez vous consulter"
+           ACCEPT wSelectedHerbierId
+           PERFORM check_herbier_be_update
+           IF wHerbierUpdate = 0 THEN
+              DISPLAY "Vous ne pouvez pas consulter cet herbier"
+           END-IF
+          END-PERFORM
+          DISPLAY " "
+          PERFORM display_herbier_by_id
+       END-IF.
+       
+       display_update_herbier_utilisateur.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       PERFORM display_user_herbier
+       IF wNoHerbier = 0 THEN
+       
+          PERFORM WITH TEST AFTER UNTIL wHerbierUpdate = 1
+                                 
+             DISPLAY "Quel identifiant herbier souhaitez vous consulter"
+             ACCEPT wSelectedHerbierId
+             PERFORM check_herbier_be_update
+                IF wHerbierUpdate = 0 THEN
+                   DISPLAY "Vous ne pouvez pas modifier cet herbier"
+                END-IF
+          END-PERFORM
+          DISPLAY " "
+          PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 5
+              DISPLAY " "
+              DISPLAY CONST_DISPLAY_MENU
+              DISPLAY " "
+
+              IF wActionChosen > 4 OR wActionChosen < 0 THEN
+                  DISPLAY CONST_ACTION_IMPOSSIBLE
+              END-IF
+
+           
+              IF wIsAnonymous = 0 THEN
+                DISPLAY CONST_ACTION_SENTENCE
+                DISPLAY " "
+		
+                DISPLAY "        1 : modifier les informations de",
+                                  "l'herbier"
+                DISPLAY "        2 : ajouter une plante à l'herbier"
+                DISPLAY "        3 : supprimer une plante de l'herbier"
+                DISPLAY "        3 : supprimer l'herbier"
+           
+                DISPLAY " "
+                DISPLAY "        0 : retourner au menu"
+                DISPLAY " "
+              ELSE
+                PERFORM display_global_menu
+              END-IF
+              ACCEPT wActionChosen
+              DISPLAY " "
+       END-PERFORM
+       
+       EVALUATE wActionChosen
+       WHEN 0
+*> retour au menu global
+          PERFORM display_global_menu
+       WHEN 1
+ *> modifier les informations de l'herbier
+         PERFORM update_herbier
+         PERFORM display_herbier_menu
+       WHEN 2
+ *> ajouter une plante à l'herbier
+           PERFORM display_herbier_plantes
+           PERFORM add_herbier_plante
+           PERFORM display_herbier_menu
+       WHEN 3
+ *> supprimer une plante de l'herbier
+           PERFORM delete_herbier_plante
+           PERFORM display_herbier_menu
+       WHEN 4
+ *> supprimerl'herbier
+           PERFORM delete_herbier_menu
+           PERFORM display_herbier_menu
+       END-EVALUATE
+       END-IF.
+       
+       delete_herbier_menu.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune       
+       PERFORM display_user_herbier
+       IF wNoHerbier = 0 THEN
+       
+          PERFORM WITH TEST AFTER UNTIL wHerbierUpdate = 1
+                                 
+           DISPLAY "Quel identifiant herbier souhaitez vous supprimer"
+           ACCEPT wSelectedHerbierId
+           PERFORM check_herbier_be_update
+           IF wHerbierUpdate = 0 THEN
+              DISPLAY "Vous ne pouvez pas supprimer cet herbier"
+           END-IF
+          END-PERFORM
+          DISPLAY " "
+          PERFORM WITH TEST AFTER UNTIL wActionChosen = 0 OR
+          wActionChosen = 1
+                                 
+           DISPLAY "Souhaitez vous supprimer l'herbier ? 1 = oui,", 
+           " 0 = non"
+           ACCEPT wActionChosen
+          END-PERFORM
+          IF wActionChosen = 1 THEN
+             PERFORM delete_herbier
+          END-IF
+       END-IF.
+       
+       delete_herbier_menu_admin.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune       
+       PERFORM display_all_herbier
+       IF wNoHerbier = 0 THEN
+       
+          PERFORM WITH TEST AFTER UNTIL wSelectedHerbierId > 0 AND 
+          wSelectedHerbierId <= l_h_id
+                                 
+           DISPLAY "Quel identifiant herbier souhaitez vous supprimer"
+           ACCEPT wSelectedHerbierId
+           
+          END-PERFORM
+          DISPLAY " "
+          PERFORM WITH TEST AFTER UNTIL wActionChosen = 0 OR
+          wActionChosen = 1
+                                 
+           DISPLAY "Souhaitez vous supprimer l'herbier ? 1 = oui,", 
+           " 0 = non"
+           ACCEPT wActionChosen
+          END-PERFORM
+          IF wActionChosen = 1 THEN
+             PERFORM delete_herbier
+          END-IF
+       END-IF.
+       
+       display_update_herbier_admin.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       PERFORM display_all_herbier
+       IF wNoHerbier = 0 THEN
+       
+          PERFORM WITH TEST AFTER UNTIL wSelectedHerbierId > 0 AND 
+          wSelectedHerbierId <= l_h_id
+                                 
+           DISPLAY "Quel identifiant herbier souhaitez vous consulter"
+           ACCEPT wSelectedHerbierId
+          END-PERFORM
+          DISPLAY " "
+          PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 5
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 4 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           
+           IF wIsAnonymous = 0 THEN
+             DISPLAY CONST_ACTION_SENTENCE
+             DISPLAY " "
+		
+             DISPLAY "        1 : modifier les informations de l'herbier"
+             DISPLAY "        2 : ajouter une plante à l'herbier"
+             DISPLAY "        3 : supprimer une plante de l'herbier"
+             DISPLAY "        3 : supprimer l'herbier"
+           
+             DISPLAY " "
+             DISPLAY "        0 : retourner au menu"
+             DISPLAY " "
+           ELSE
+             PERFORM display_global_menu
+           END-IF
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+       
+       EVALUATE wActionChosen
+       WHEN 0
+*> retour au menu global
+          PERFORM display_global_menu
+       WHEN 1
+ *> modifier les informations de l'herbier
+         PERFORM update_herbier
+         PERFORM display_herbier_menu
+       WHEN 2
+ *> ajouter une plante à l'herbier
+           PERFORM display_herbier_plantes
+           PERFORM add_herbier_plante
+           PERFORM display_herbier_menu
+       WHEN 3
+ *> supprimer une plante de l'herbier
+           PERFORM delete_herbier_plante
+           PERFORM display_herbier_menu
+       WHEN 4
+ *> supprimerl'herbier
+           PERFORM delete_herbier_menu
+           PERFORM display_herbier_menu
+       END-EVALUATE
+       END-IF.
+       
+       check_herbier_be_update.
+*> Permet d'afficher toutes les infos d'un herbier en fonction de son
+*> id
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+*> - wSelectedHerbierId 
+*> - wConnectedUser           
+        
+       OPEN INPUT fher
+       MOVE 0 TO wNoHerbier
+       MOVE wSelectedHerbierId TO fh_id
+       READ fher
+       INVALID KEY 
+           DISPLAY "Cet herbier n'existe pas"
+           MOVE 1 TO wNoHerbier
+       NOT INVALID KEY 
+           IF fh_utilisateur = wConnectedUser THEN
+               MOVE 1 TO wHerbierUpdate
+           ELSE 
+               MOVE 0 TO wHerbierUpdate
+           END-IF
+       END-READ
+       CLOSE fher.
   
+*> utilisateur
 
        count_utilisateurs.
 *> Compte le nombre d'utilisateurs présents dans la fichier utilisateurs
@@ -570,6 +971,7 @@ STOP RUN.
            READ futil
            KEY IS fu_login
                NOT INVALID KEY     MOVE fu_id TO wConnectedUser
+               MOVE fu_role TO wConnectedUserRole
            END-READ
            CLOSE futil
 
@@ -784,7 +1186,8 @@ STOP RUN.
 
        EVALUATE wActionChosen
        WHEN 0
-          *> retour à la page d'accueil
+*> retour à la page d'accueil
+          PERFORM display_admin_user_menu
        WHEN 1
           *> passage de l'utilisateur en tant qu'éditeur
            PERFORM accept_user_editor
@@ -1066,13 +1469,14 @@ STOP RUN.
 
        EVALUATE wActionChosen
        WHEN 0
-          *> retour à la page d'accueil
+*> retour à la page d'accueil
+          PERFORM display_admin_user_menu
        WHEN 1
-          *> modification du login
+*> modification du login
            PERFORM update_self_login
            PERFORM display_account_menu
        WHEN 2
-          *> suppression du mot de passe
+*> suppression du mot de passe
            PERFORM update_self_password
            PERFORM display_account_menu
        END-EVALUATE.
@@ -1320,6 +1724,57 @@ STOP RUN.
            END-READ
            CLOSE futil
        END-IF.
+       
+       display_admin_user_menu.
+*> Affiche le menu de gestion des utilisateurs. Avant d'exécuter cette
+*> fonction, il est nécessaire de vérifier que l'utilisateur connecté
+*> est bien un administrateur !
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 3
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           PERFORM display_users
+           DISPLAY " "
+
+           IF wActionChosen > 2 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+
+           DISPLAY "        1 : gérer les utilisateurs en attentes"
+           DISPLAY "        2 : gérer tout les utilisateur"
+           DISPLAY " "
+           DISPLAY "        0 : retourner à la page d'acceuil"
+           DISPLAY " "
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+*> retour à la page d'accueil
+           PERFORM display_global_menu
+       WHEN 1
+*> modification d'un utilisateur
+           PERFORM display_waiting_users_menu
+           PERFORM display_admin_user_menu
+       WHEN 2
+*> suppression d'un utilisateur
+           PERFORM delete_user_menu
+           PERFORM display_admin_user_menu
+       END-EVALUATE.
+
+*> plante
 
        last_plante_id.
 *> Parcourt le fichier plante à la recherche du plus grand id. Une fois
@@ -1828,6 +2283,123 @@ STOP RUN.
        END-READ
        CLOSE fplan.
        
+       display_admin_plante_menu.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 6
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 5 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           
+           IF wIsAnonymous = 0 THEN
+             DISPLAY CONST_ACTION_SENTENCE
+             DISPLAY " "
+		
+             DISPLAY "        1 : consulter les plantes"
+             DISPLAY "        2 : supprimer une plante"
+             DISPLAY "        3 : ajouter une plante"
+             DISPLAY "        4 : modifier les informations d'une plante"
+             DISPLAY "        5 : consulter statistique"
+           
+             DISPLAY " "
+             DISPLAY "        0 : retourner au menu"
+             DISPLAY " "
+           ELSE
+             PERFORM display_global_menu
+           END-IF
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+*> retour au menu global
+          PERFORM display_global_menu
+       WHEN 1
+ *> consulter les plantes
+         PERFORM display_plantes
+         PERFORM display_herbier_menu
+       WHEN 2
+ *> supprimer une plante
+           PERFORM display_delete_plante
+           PERFORM display_herbier_menu
+       WHEN 3
+ *> ajouter une plante
+           PERFORM add_plante
+           PERFORM display_herbier_menu
+       WHEN 4
+ *> gérer une plante
+           PERFORM display_update_plante
+           PERFORM display_herbier_menu
+       WHEN 5
+ *> consulter statistique
+           PERFORM display_update_herbier_admin
+           PERFORM display_herbier_menu
+       END-EVALUATE.
+       
+       display_update_plante.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       PERFORM display_plantes
+       IF wLastPlantId = 0 THEN
+       
+          PERFORM WITH TEST AFTER UNTIL wSelectedPlanteId > 0 AND
+          wSelectedPlanteId <= wLastPlantId
+                                 
+           DISPLAY "Quel identifiant de plante souhaitez vous modifier"
+           ACCEPT wSelectedPlanteId
+          END-PERFORM
+          DISPLAY " "
+          PERFORM update_plante
+       END-IF.
+       
+       display_delete_plante.
+*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
+*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       PERFORM display_plantes
+       IF wLastPlantId = 0 THEN
+       
+          PERFORM WITH TEST AFTER UNTIL wSelectedPlanteId > 0 AND
+          wSelectedPlanteId <= wLastPlantId
+                                 
+           DISPLAY "Quel identifiant de plante souhaitez vous supprimer"
+           ACCEPT wSelectedPlanteId
+          END-PERFORM
+          DISPLAY " "
+          PERFORM delete_plante
+       END-IF.
+ 
+ *> herbier_plante
+       
        add_herbier_plante.
 *> Permet d'ajouter une plante dans un herbier avec herbier_plante
 *> 
@@ -2164,3 +2736,119 @@ STOP RUN.
            END-PERFORM
        END-START
        CLOSE fhpl.
+       
+       display_global_menu.
+*> Affiche le menu général de l'application. Cette fonction s'éxécute
+*> à l'ouverture de l'application.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 9
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 8 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+
+           DISPLAY "        1 : consulter les herbiers"
+           DISPLAY "        2 : consulter les feuilles"
+           DISPLAY "        3 : consulter les fleurs"
+           IF wIsAnonymous = 1 THEN
+             DISPLAY "        4 : créer un compte"
+             DISPLAY "        5 : se connecter"
+           ElSE
+              DISPLAY "        4 : gérer ses herbiers"
+              DISPLAY "        5 : gérer ses informations"
+              DISPLAY "        6 : se déconnecter"
+              IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
+                DISPLAY "--Fonctionnalités administrateur--"
+                DISPLAY "        7 : gérer les herbiers"
+                DISPLAY "        8 : gérer les plantes"
+                DISPLAY "        9 : gérer les utilisateurs"
+             END-IF
+           END-IF
+           DISPLAY " "
+           DISPLAY "        0 : quitter l'application"
+           DISPLAY " "
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+ *> retour à la page d'accueil
+          exit
+       WHEN 1
+ *> consulter les herbiers
+         PERFORM display_all_herbier
+         PERFORM display_global_menu
+       WHEN 2
+ *> consulter les feuilles
+           MOVE CONST_PLANT_LEAF TO wTypePlante
+           PERFORM display_plantes_type
+           PERFORM display_global_menu
+       WHEN 3
+ *> consulter les fleurs
+           MOVE CONST_PLANT_FLOWER TO wTypePlante
+           PERFORM display_plantes_type
+           PERFORM display_global_menu
+       WHEN 4
+ *> créer un compte / gérer ses herbiers
+           IF wIsAnonymous = 1 THEN
+              PERFORM sign_in
+           ELSE
+              PERFORM display_herbier_menu
+           END-IF
+           PERFORM display_global_menu
+       WHEN 5
+ *> se connecter / gérer ses informations
+           IF wIsAnonymous = 1 THEN
+              PERFORM login
+           ELSE
+              PERFORM display_account_menu
+           END-IF
+           PERFORM display_global_menu
+       WHEN 6
+ *> se déconnecter
+           IF wIsAnonymous = 0 THEN
+              PERFORM display_plantes
+           END-IF
+           PERFORM display_global_menu
+       WHEN 7
+ *> gérer les herbiers
+           IF wIsAnonymous = 0 THEN
+              IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
+                PERFORM display_admin_herbier_menu
+              END-IF
+           END-IF
+           PERFORM display_global_menu
+       WHEN 8
+ *> gérer les plantes
+           IF wIsAnonymous = 0 THEN
+              IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
+                PERFORM display_admin_plante_menu
+              END-IF
+           END-IF
+           PERFORM display_global_menu
+       WHEN 9
+ *> gérer les utilisateurs
+           IF wIsAnonymous = 0 THEN
+              IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
+                PERFORM display_admin_user_menu
+              END-IF
+           END-IF
+           PERFORM display_global_menu
+       END-EVALUATE.
