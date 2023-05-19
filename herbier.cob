@@ -112,6 +112,7 @@ WORKING-STORAGE SECTION.
        77 l_h_id PIC 9(3).
        77 wEndOfFile PIC 9(1).
        77 wUtilisateursCount PIC 9(3).
+       77 wHerbierCount PIC 9(3).
        77 wMaxUserId PIC 9(3).
        77 wConnectedUser PIC 9(3).
        77 wConnectedUserRole PIC A(15).
@@ -146,9 +147,22 @@ WORKING-STORAGE SECTION.
        77 wUniquePlanteLatinName PIC 9(1).
        77 wNoPlante PIC 9(1).
        77 wSelectedplanteId PIC 9(3).
-       77 wDeletePlanteId PIC 9(3).
-        
-        
+       77 wCurrentPlantId PIC 9(3).
+       77 wPlantCount PIC 9(3).
+       77 wPlantTotalCount PIC 9(3).
+       77 wCurrentHerbierId PIC 9(3).
+       77 wEndOfZone PIC 9(1).
+       77 wAvgHerbierByUser PIC 9(3).
+
+       77 wDateMonth PIC A(2).
+
+
+      *> Variables fonction distanciel
+       77 wDistUserType PIC A(15).
+       77 wDistMonth PIC A(2).
+       77 wDistPlace PIC A(40).
+       
+       
 PROCEDURE DIVISION.
 
 *> Initialisation du programme (opérations à faire avant les interac-
@@ -206,8 +220,6 @@ PERFORM last_herbier_id.
 PERFORM last_plante_id.
 PERFORM last_herbier_plante_id.
 
-
-
 STOP RUN.
 
 *> herbier
@@ -220,13 +232,16 @@ STOP RUN.
 *> Variables utilisées :
 *> - l_h_id
 *> - wEndOfFile
+*> - wHerbierCount
        OPEN INPUT fher
        MOVE 0 TO wEndOfFile
+       MOVE 0 TO wHerbierCount
        MOVE 0 TO l_h_id
        PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
            READ fher
            AT END MOVE 1 TO wEndOfFile
            NOT AT END
+               ADD 1 TO wHerbierCount
                IF fh_id > l_h_id THEN
                    MOVE fh_id TO l_h_id
                END-IF
@@ -239,7 +254,8 @@ STOP RUN.
 *> Permet d'ajouter un herbier dans le fichier herbier
 *> 
 *> Variables utilisées :
-*> - l_h_id 
+*> - l_h_id
+*> - wHerbierCount
        DISPLAY "Nom de l'herbier ?"
        ACCEPT fh_nom
        MOVE wConnectedUser TO fh_utilisateur
@@ -252,6 +268,7 @@ STOP RUN.
            ACCEPT fh_type
        END-PERFORM
        ADD 1 TO l_h_id
+       ADD 1 TO wHerbierCount
        MOVE l_h_id TO fh_id
        OPEN I-O fher
        WRITE tamp_fher
@@ -262,7 +279,8 @@ STOP RUN.
 *> Permet de supprimer un herbier dans le fichier herbier
 *> 
 *> Variables utilisées :
-*> - l_h_id          
+*> - l_h_id
+*> - wHerbierCount
        OPEN I-O fhpl
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoHerbier
@@ -292,16 +310,37 @@ STOP RUN.
            DISPLAY "Cet herbier n'existe pas"
            MOVE 1 TO wNoHerbier
        NOT INVALID KEY 
-           ADD -1 TO l_h_id
+           ADD -1 TO wHerbierCount
            DELETE fher RECORD
        END-READ
        CLOSE fher.
         
         update_herbier.
-*> Permet de supprimer un herbier dans le fichier herbier
+*> Permet de mettre un herbier à jour dans le fichier herbier
 *> 
 *> Variables utilisées :
-*> - l_h_id
+*> wSelectedHerbierId
+*>
+*> Nombre de lectures : 1
+       MOVE wSelectedHerbierId TO fh_id
+
+       OPEN I-O fher
+       READ fher
+       NOT INVALID KEY
+           PERFORM update_herbier_input
+           REWRITE tamp_fher
+       END-READ
+       CLOSE fher.
+
+       update_herbier_input.
+*> Gère les entrées utilisateur pour la modification d'un herbier.
+*> ⚠️ Cette fonction ne peut fonctionner que si on a déjà ouvert le
+*> fichier herbier et lu jusqu'à l'herbier qui nous intéresse !
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*>
+*> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
                                  AND wActionChosen < 2
@@ -341,13 +380,7 @@ STOP RUN.
                DISPLAY "Feuille/Fleur/Mixte (attention à la majuscule)"
                ACCEPT fh_type
            END-PERFORM
-       END-IF
-        
-       OPEN I-O fher
-       READ fher
-       NOT INVALID KEY     REWRITE tamp_fher
-       END-READ
-       CLOSE fher.
+       END-IF.
         
        display_all_herbier.
 *> Permet d'afficher l'id, le nom et le type de tout les herbiers
@@ -492,6 +525,8 @@ STOP RUN.
            WRITE tamp_futil
            END-WRITE
            CLOSE futil
+
+           ADD 1 TO wUtilisateursCount
        END-IF.
 
        login.
@@ -554,6 +589,17 @@ STOP RUN.
            DISPLAY " "
        END-IF.
 
+       log_out.
+*> Permet de déconnecter l'utilisateur actuellement connecté.
+*>
+*> Variables utilisées :
+*> - wConnectedUser
+*> - wIsAnonymous
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wConnectedUser
+       MOVE 1 TO wIsAnonymous.
+
        check_connection.
 *> Vérifie si l'utilisateur est connecté.
 *>
@@ -595,6 +641,7 @@ STOP RUN.
        ELSE
            DISPLAY "Nom : ", fu_login, "           ",
                    "Role : ", fu_role
+           DISPLAY "Type : ", fu_type
        END-IF.
 
        check_unique_login.
@@ -622,6 +669,8 @@ STOP RUN.
 *> - wUniqueLogin
 *> - wLogin
 *> - wPassword
+*> - wMaxUserId
+*> - wUtilisateurCount
 *>
 *> Nombre de lectures : aucune
        MOVE 1 TO wUniqueLogin
@@ -979,6 +1028,105 @@ STOP RUN.
            PERFORM delete_user_menu
            PERFORM display_users_menu
        END-EVALUATE.
+
+       display_account_menu.
+*> Affiche le menu de gestion de son propre compte (consultation & édi-
+*> tion des infos)
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 3
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           PERFORM display_user_info
+           DISPLAY " "
+
+           IF wActionChosen > 2 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+
+           DISPLAY "        1 : modifer le nom d'utilisateur"
+           DISPLAY "        2 : modifier le mot de passe"
+           DISPLAY " "
+           DISPLAY "        0 : retourner à la page d'acceuil"
+           DISPLAY " "
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+          *> retour à la page d'accueil
+       WHEN 1
+          *> modification du login
+           PERFORM update_self_login
+           PERFORM display_account_menu
+       WHEN 2
+          *> suppression du mot de passe
+           PERFORM update_self_password
+           PERFORM display_account_menu
+       END-EVALUATE.
+
+       update_self_login.
+*> Permet de modifier son propre login.
+*>
+*> Variables utilisées :
+*> - wLogin
+*> - wConnectedUser
+*> - wUniqueLogin
+*>
+*> Nombre de lectures : Une.
+       MOVE 1 TO wUniqueLogin
+           
+       PERFORM WITH TEST AFTER UNTIL wUniqueLogin = 1
+           IF wUniqueLogin = 0 THEN
+               DISPLAY "Ce nom d'utilisateur est déjà utilisé."
+           END-IF
+           DISPLAY "Entrez votre nouveau nom d'utilisateur"
+           ACCEPT wLogin
+    
+           PERFORM check_unique_login
+       END-PERFORM
+
+       MOVE wConnectedUser TO fu_id
+       OPEN I-O futil
+       READ futil
+       NOT INVALID KEY
+           MOVE wLogin TO fu_login
+           REWRITE tamp_futil
+       END-READ
+       CLOSE futil.
+
+       update_self_password.
+*> Permet de modifier son propre mot de passe.
+*>
+*> Variables utilisées :
+*> - wPassword
+*> - wConnectedUser
+*>
+*> Nombre de lectures : Une.
+       DISPLAY "Choisissez votre nouveau mot de passe (20 caractères ",
+               "max)"
+       ACCEPT wPassword
+       DISPLAY " "
+
+       MOVE wConnectedUser TO fu_id
+       OPEN I-O futil
+       READ futil
+       NOT INVALID KEY
+           MOVE wPassword TO fu_mdp
+           REWRITE tamp_futil
+       END-READ
+       CLOSE futil.
 
        update_user_menu.
 *> Permet de modifier un utilisateur. Cependant, l'ID et le login ne
@@ -1461,13 +1609,37 @@ STOP RUN.
            END-PERFORM
        END-START
        CLOSE fplan.
-       
+
        update_plante.
-*> Permet de supprimer une plante dans le fichier plante
+*> Permet de mettre une plante à jour dans le fichier plante.
+*>
+*> Variables utilisées :
+*> - wSelectedPlantId
+*>
+*> Nombre de lectures : 1
+       MOVE wSelectedPlanteId TO pl_id
+
+       OPEN I-O fplan
+       READ fplan
+       NOT INVALID KEY
+           PERFORM update_plante_input
+           REWRITE tamp_fplan
+       END-READ
+       CLOSE fplan.
+       
+       update_plante_input.
+*> Gère les entrées utilisateur pour la modification d'une plante.
+*> ⚠️ Cette fonction ne peut fonctionner que si on a déjà ouvert le
+*> fichier plante et lu jusqu'à la plante qui nous intéresse !
 *> 
 *> Variables utilisées :
-*> - wLastPlantId
-
+*> - wActionChosen
+*> - UniquePlanteName
+*> - ExitFunction
+*> - wPlantName
+*> - wUniquePlanteLatinName
+*>
+*> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
                                  AND wActionChosen < 2
@@ -1612,19 +1784,15 @@ STOP RUN.
        END-IF
        
        MOVE wPlanteName TO pl_nom
-       MOVE wPlanteLatinName TO pl_nomLatin
-        
-       OPEN I-O fplan
-       READ fplan
-       NOT INVALID KEY     REWRITE tamp_fplan
-       END-READ
-       CLOSE fplan.
+       MOVE wPlanteLatinName TO pl_nomLatin.
        
        delete_plante.
 *> Permet de supprimer une plante dans le fichier plante
 *> 
 *> Variables utilisées :
-*> - l_h_id          
+*> - wSelectedPlantId
+*> - wEndOfFile
+*> - wNoPlante          
        OPEN I-O fhpl
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoPlante
@@ -1654,7 +1822,7 @@ STOP RUN.
            DISPLAY "Cette plante n'existe pas"
            MOVE 1 TO wNoPlante
        NOT INVALID KEY 
-           ADD -1 TO wLastPlantId
+      *>     ADD -1 TO wLastPlantId
            DELETE fplan RECORD
        END-READ
        CLOSE fplan.
@@ -1785,6 +1953,152 @@ STOP RUN.
                        PERFORM display_plantes_table_line
                    ELSE
                        MOVE 1 TO wEndOfFile
+
+       display_plante_stats.
+*> Cette fonction permet d'afficher, pour la plante courante (dont l'id
+*> est contenu dans wCurrentPlantId), le nombre d'herbiers dans lesquels
+*> elle apparaît ainsi que leur nom, et son nombre total de précences.
+*>
+*> Variables utilisées :
+*> - wCurrentPlantId
+*> - wEndOfFile
+*> - wEndOfZone
+*> - wPlantCount
+*> - wPlantTotalCount
+*>
+*> Nombre de lectures : autant qu'il y a d'herbiers, plus autant qu'il y
+*> a de plantes dans les herbiers (on va faire une recherche séquen-
+*> tielle sur les herbiers, et pour chaque, on va faire une recherche
+*> sur zone sur les herbiers dans le fichier herbier_plante pour regar-
+*> der combien on a de plantes correspondant à celle recherchée).
+       MOVE 0 TO wEndOfFile
+       MOVE 0 TO wPlantTotalCount
+
+       DISPLAY "ID de l'herbier | Titre                          | ",
+               "Nombre de présences"
+       DISPLAY "----------------|--------------------------------|-",
+               "-------------------"
+       
+
+       OPEN INPUT fher
+       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+           READ fher
+           AT END      MOVE 1 TO wEndOfFile
+           NOT AT END
+              *> Recherche sur zone des plantes de l'herbier
+               MOVE fh_id TO fhpl_idHerbier
+               MOVE 0 TO wEndOfZone
+               MOVE 0 TO wPlantCount
+
+               OPEN INPUT fhpl
+               START fhpl, KEY IS = fhpl_idHerbier
+               INVALID KEY     MOVE 1 TO wEndOfZone
+               NOT INVALID KEY
+                   PERFORM WITH TEST AFTER UNTIL wEndOfZone = 1
+                       READ fhpl NEXT
+                       AT END      MOVE 1 TO wEndOfZone
+                       NOT AT END
+                           IF fhpl_idHerbier = fh_id
+                               IF fhpl_idPlante = wCurrentPlantId THEN
+                                   ADD 1 TO wPlantCount
+                               END-IF
+                           ELSE
+                              MOVE 1 TO wEndOfZone
+                           END-IF
+                       END-READ
+                   END-PERFORM
+               END-START
+               CLOSE fhpl
+
+               IF wPlantCount > 0 THEN
+                   DISPLAY "            ", fh_id, " | ", fh_nom, " | ",
+                           "                ", wPlantCount
+                   ADD wPlantCount TO wPlantTotalCount
+               END-IF
+           END-READ
+       END-PERFORM
+       CLOSE fher
+
+       DISPLAY " "
+       DISPLAY "Nombre de présences total : ", wPlantTotalCount.
+
+       compute_average_herbier_by_user.
+*> Compte le nombre total d'herbiers, d'utilisateurs, et renvoie dans
+*> wAvgHerbierByUser le résultat du rapport du premier sur le second.
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+*> - wAvgHerbierByUser
+*>
+*> Nombre de lectures : Aucune, on charge en mémoire le nombre d'herb-
+*> iers et d'utilisateurs au lancement et on en garde la trace au fil
+*> des manipulations de l'utilisateur
+       DIVIDE wHerbierCount BY wUtilisateursCount
+           GIVING wAvgHerbierByUser
+           SIZE ERROR
+               DISPLAY "Il faut au moins un utilisateur pour pouvoir ",
+                       "calculer le nombre moyen d'herbiers par ",
+                       "utilisateur !"
+       END-DIVIDE.
+
+       month_from_herbier.
+*> Fonction permettant de récupérer le mois depuis une date entière.
+*>
+*> Variables utilisées :
+*> - wDateMonth
+*>
+*> Nombre de lectures : aucune
+       MOVE fh_date(5:6) TO wDateMonth.
+
+*> FONCTION DISTANCIEL :
+       herbier_name_from_month_and_user_type_with_plant_origin.
+*> Pour un type d'utilisateur stocké dans wDistUserType, affiche le nom
+*> des herbiers créés à un mois contenu dans wDistMonth avec au moins
+*> une plante cueillie dans le lieu contenu dans wDistPlace.
+*>
+*> Variables utilisées :
+*> - wDistUserType
+*> - wDistMonth
+*> - wDistPlace
+*> - wEndOfZone
+*> - wDateMonth
+*>
+*> Nombre de lectures : voir rendu distanciel
+       MOVE 0 TO wEndOfZone
+       MOVE wDistPlace TO fhpl_lieu
+
+      *> Lecture sur zone de herbier_plante (tri par lieu)
+       OPEN INPUT fhpl
+       START fhpl, KEY IS = fhpl_lieu
+       INVALID KEY     DISPLAY "Aucun herbier correspondant"
+       NOT INVALID KEY
+           PERFORM WITH TEST AFTER UNTIL wEndOfZone = 1
+               READ fhpl NEXT
+               AT END      MOVE 1 TO wEndOfZone
+               NOT AT END
+                   IF fhpl_lieu = wDistPlace THEN
+                      *> Lecture directe de l'herbier lié
+                       MOVE fhpl_idHerbier TO fh_id
+                       OPEN INPUT fher
+                       READ fher
+                       NOT INVALID KEY
+                           PERFORM month_from_herbier
+                           IF wDateMonth = wDistMonth THEN
+                              *> Lecture directe de l'utilisateur lié
+                               MOVE fh_utilisateur TO fu_id
+                               OPEN INPUT futil
+                               READ futil
+                               NOT INVALID KEY
+                                   IF fu_type = wDistUserType THEN
+                                       DISPLAY fh_nom
+                                   END-IF
+                               END-READ
+                               CLOSE futil
+                           END-IF
+                       END-READ
+                       CLOSE fher
+                   ELSE
+                       MOVE 1 TO wEndOfZone
                    END-IF
                END-READ
            END-PERFORM
