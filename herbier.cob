@@ -608,6 +608,7 @@ STOP RUN.
        ELSE
            DISPLAY "Nom : ", fu_login, "           ",
                    "Role : ", fu_role
+           DISPLAY "Type : ", fu_type
        END-IF.
 
        check_unique_login.
@@ -994,6 +995,105 @@ STOP RUN.
            PERFORM delete_user_menu
            PERFORM display_users_menu
        END-EVALUATE.
+
+       display_account_menu.
+*> Affiche le menu de gestion de son propre compte (consultation & édi-
+*> tion des infos)
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen < 3
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           PERFORM display_user_info
+           DISPLAY " "
+
+           IF wActionChosen > 2 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+
+           DISPLAY "        1 : modifer le nom d'utilisateur"
+           DISPLAY "        2 : modifier le mot de passe"
+           DISPLAY " "
+           DISPLAY "        0 : retourner à la page d'acceuil"
+           DISPLAY " "
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+          *> retour à la page d'accueil
+       WHEN 1
+          *> modification du login
+           PERFORM update_self_login
+           PERFORM display_account_menu
+       WHEN 2
+          *> suppression du mot de passe
+           PERFORM update_self_password
+           PERFORM display_account_menu
+       END-EVALUATE.
+
+       update_self_login.
+*> Permet de modifier son propre login.
+*>
+*> Variables utilisées :
+*> - wLogin
+*> - wConnectedUser
+*> - wUniqueLogin
+*>
+*> Nombre de lectures : Une.
+       MOVE 1 TO wUniqueLogin
+           
+       PERFORM WITH TEST AFTER UNTIL wUniqueLogin = 1
+           IF wUniqueLogin = 0 THEN
+               DISPLAY "Ce nom d'utilisateur est déjà utilisé."
+           END-IF
+           DISPLAY "Entrez votre nouveau nom d'utilisateur"
+           ACCEPT wLogin
+    
+           PERFORM check_unique_login
+       END-PERFORM
+
+       MOVE wConnectedUser TO fu_id
+       OPEN I-O futil
+       READ futil
+       NOT INVALID KEY
+           MOVE wLogin TO fu_login
+           REWRITE tamp_futil
+       END-READ
+       CLOSE futil.
+
+       update_self_password.
+*> Permet de modifier son propre mot de passe.
+*>
+*> Variables utilisées :
+*> - wPassword
+*> - wConnectedUser
+*>
+*> Nombre de lectures : Une.
+       DISPLAY "Choisissez votre nouveau mot de passe (20 caractères ",
+               "max)"
+       ACCEPT wPassword
+       DISPLAY " "
+
+       MOVE wConnectedUser TO fu_id
+       OPEN I-O futil
+       READ futil
+       NOT INVALID KEY
+           MOVE wPassword TO fu_mdp
+           REWRITE tamp_futil
+       END-READ
+       CLOSE futil.
 
        update_user_menu.
 *> Permet de modifier un utilisateur. Cependant, l'ID et le login ne
