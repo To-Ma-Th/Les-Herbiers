@@ -540,7 +540,9 @@ STOP RUN.
            PERFORM display_herbier_menu
        WHEN 4
  *> statistique 
-           PERFORM display_update_herbier_admin
+           PERFORM compute_average_herbier_by_user
+           DISPLAY "Nombre d'herbier moyen par utilisateur :", 
+           wAvgHerbierByUser
            PERFORM display_herbier_menu
        END-EVALUATE.
        
@@ -2348,7 +2350,7 @@ STOP RUN.
            PERFORM display_herbier_menu
        WHEN 5
  *> consulter statistique
-           PERFORM display_update_herbier_admin
+           PERFORM display_plante_stats
            PERFORM display_herbier_menu
        END-EVALUATE.
        
@@ -2824,7 +2826,7 @@ STOP RUN.
        WHEN 6
  *> se déconnecter
            IF wIsAnonymous = 0 THEN
-              PERFORM display_plantes
+              PERFORM log_out
            END-IF
            PERFORM display_global_menu
        WHEN 7
