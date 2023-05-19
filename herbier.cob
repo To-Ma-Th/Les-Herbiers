@@ -309,10 +309,31 @@ STOP RUN.
        CLOSE fher.
         
         update_herbier.
-*> Permet de supprimer un herbier dans le fichier herbier
+*> Permet de mettre un herbier à jour dans le fichier herbier
 *> 
 *> Variables utilisées :
-*> - l_h_id
+*> wSelectedHerbierId
+*>
+*> Nombre de lectures : 1
+       MOVE wSelectedHerbierId TO fh_id
+
+       OPEN I-O fher
+       READ fher
+       NOT INVALID KEY
+           PERFORM update_herbier_input
+           REWRITE tamp_fher
+       END-READ
+       CLOSE fher.
+
+       update_herbier_input.
+*> Gère les entrées utilisateur pour la modification d'un herbier.
+*> ⚠️ Cette fonction ne peut fonctionner que si on a déjà ouvert le
+*> fichier herbier et lu jusqu'à l'herbier qui nous intéresse !
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*>
+*> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
                                  AND wActionChosen < 2
@@ -352,13 +373,7 @@ STOP RUN.
                DISPLAY "Feuille/Fleur/Mixte (attention à la majuscule)"
                ACCEPT fh_type
            END-PERFORM
-       END-IF
-        
-       OPEN I-O fher
-       READ fher
-       NOT INVALID KEY     REWRITE tamp_fher
-       END-READ
-       CLOSE fher.
+       END-IF.
         
        display_all_herbier.
 *> Permet d'afficher l'id, le nom et le type de tout les herbiers
@@ -1587,9 +1602,28 @@ STOP RUN.
            END-PERFORM
        END-START
        CLOSE fplan.
-       
+
        update_plante.
-*> Permet de supprimer une plante dans le fichier plante
+*> Permet de mettre une plante à jour dans le fichier plante.
+*>
+*> Variables utilisées :
+*> - wSelectedPlantId
+*>
+*> Nombre de lectures : 1
+       MOVE wSelectedPlanteId TO pl_id
+
+       OPEN I-O fplan
+       READ fplan
+       NOT INVALID KEY
+           PERFORM update_plante_input
+           REWRITE tamp_fplan
+       END-READ
+       CLOSE fplan.
+       
+       update_plante_input.
+*> Gère les entrées utilisateur pour la modification d'une plante.
+*> ⚠️ Cette fonction ne peut fonctionner que si on a déjà ouvert le
+*> fichier plante et lu jusqu'à la plante qui nous intéresse !
 *> 
 *> Variables utilisées :
 *> - wActionChosen
@@ -1597,6 +1631,8 @@ STOP RUN.
 *> - ExitFunction
 *> - wPlantName
 *> - wUniquePlanteLatinName
+*>
+*> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
                                  AND wActionChosen < 2
