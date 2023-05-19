@@ -147,6 +147,7 @@ WORKING-STORAGE SECTION.
        77 wUniquePlanteLatinName PIC 9(1).
        77 wNoPlante PIC 9(1).
        77 wSelectedplanteId PIC 9(3).
+       77 wDeletePlanteId PIC 9(3).
        77 wCurrentPlantId PIC 9(3).
        77 wPlantCount PIC 9(3).
        77 wPlantTotalCount PIC 9(3).
@@ -1953,6 +1954,11 @@ STOP RUN.
                        PERFORM display_plantes_table_line
                    ELSE
                        MOVE 1 TO wEndOfFile
+                   END-IF
+               END-READ
+           END-PERFORM
+       END-START
+       CLOSE fhpl.
 
        display_plante_stats.
 *> Cette fonction permet d'afficher, pour la plante courante (dont l'id
@@ -2049,6 +2055,60 @@ STOP RUN.
 *>
 *> Nombre de lectures : aucune
        MOVE fh_date(5:6) TO wDateMonth.
+       
+       delete_herbier_plante.
+*> Permet de supprimer une plante d'un herbier dans le fichier
+*> herbier_plante.
+*> 
+*> Variables utilisées :
+*> - l_h_id          
+       PERFORM display_herbier_plantes
+       
+       IF wNoHerbierPlante = 1 THEN 
+       	PERFORM WITH TEST AFTER UNTIL wDeletePlante = 1
+           DISPLAY "Veuillez saisir l'identifiant de la plante que", 
+           "que vous souhaitez supprimer de l'herbier :"
+           ACCEPT wSelectedPlanteId
+           PERFORM check_plant_in_herbier
+        END-PERFORM
+        
+        OPEN I-O fhpl
+        MOVE 0 TO wNoPlante
+        MOVE wDeletePlanteId TO fhpl_id
+        READ fhpl
+        INVALID KEY 
+           DISPLAY "Cette plante n'existe pas dans cet herbier"
+           MOVE 1 TO wNoPlante
+        NOT INVALID KEY 
+           ADD -1 TO wLastHerbierPlantId
+           DELETE fhpl RECORD
+        END-READ
+        CLOSE fhpl
+       END-IF.
+       
+       check_plant_in_herbier.
+*> Vérifie que la plante dans wSelectedPlanteId est une plante dans 
+*> dans l'herbier.
+*> Le résultat est stocké dans wDeletePlante
+*>
+*> Variables utilisées :
+*> - wSelectedPlanteId
+*> - wSelectedHerbierId
+*> - wDeletePlante
+       MOVE 0 TO wInsertionPlante
+       MOVE wSelectedHerbierId TO fhpl_idHerbier
+
+       OPEN INPUT fhpl
+       READ fhpl
+       KEY IS fhpl_idHerbier
+           INVALID KEY     MOVE 0 TO wDeletePlante
+           NOT INVALID KEY 
+             IF fhpl_idPlante = wSelectedPlanteId THEN
+              MOVE 1 TO wDeletePlante
+              MOVE fhpl_id TO wDeletePlanteId
+             END-IF
+       END-READ
+       CLOSE fhpl.
 
 *> FONCTION DISTANCIEL :
        herbier_name_from_month_and_user_type_with_plant_origin.
@@ -2103,58 +2163,4 @@ STOP RUN.
                END-READ
            END-PERFORM
        END-START
-       CLOSE fhpl.
-       
-       delete_herbier_plante.
-*> Permet de supprimer une plante d'un herbier dans le fichier
-*> herbier_plante.
-*> 
-*> Variables utilisées :
-*> - l_h_id          
-       PERFORM display_herbier_plantes
-       
-       IF wNoHerbierPlante = 1 THEN 
-       	PERFORM WITH TEST AFTER UNTIL wDeletePlante = 1
-           DISPLAY "Veuillez saisir l'identifiant de la plante que", 
-           "que vous souhaitez supprimer de l'herbier :"
-           ACCEPT wSelectedPlanteId
-           PERFORM check_plant_in_herbier
-        END-PERFORM
-        
-        OPEN I-O fhpl
-        MOVE 0 TO wNoPlante
-        MOVE wDeletePlanteId TO fhpl_id
-        READ fhpl
-        INVALID KEY 
-           DISPLAY "Cette plante n'existe pas dans cet herbier"
-           MOVE 1 TO wNoPlante
-        NOT INVALID KEY 
-           ADD -1 TO wLastHerbierPlantId
-           DELETE fhpl RECORD
-        END-READ
-        CLOSE fhpl
-       END-IF.
-       
-       check_plant_in_herbier.
-*> Vérifie que la plante dans wSelectedPlanteId est une plante dans 
-*> dans l'herbier.
-*> Le résultat est stocké dans wDeletePlante
-*>
-*> Variables utilisées :
-*> - wSelectedPlanteId
-*> - wSelectedHerbierId
-*> - wDeletePlante
-       MOVE 0 TO wInsertionPlante
-       MOVE wSelectedHerbierId TO fhpl_idHerbier
-
-       OPEN INPUT fhpl
-       READ fhpl
-       KEY IS fhpl_idHerbier
-           INVALID KEY     MOVE 0 TO wDeletePlante
-           NOT INVALID KEY 
-             IF fhpl_idPlante = wSelectedPlanteId THEN
-              MOVE 1 TO wDeletePlante
-              MOVE fhpl_id TO wDeletePlanteId
-             END-IF
-       END-READ
        CLOSE fhpl.
