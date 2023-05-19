@@ -567,6 +567,17 @@ STOP RUN.
            DISPLAY " "
        END-IF.
 
+       disconnect.
+*> Permet de déconnecter l'utilisateur actuellement connecté.
+*>
+*> Variables utilisées :
+*> - wConnectedUser
+*> - wIsAnonymous
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wConnectedUser
+       MOVE 1 TO wIsAnonymous.
+
        check_connection.
 *> Vérifie si l'utilisateur est connecté.
 *>
