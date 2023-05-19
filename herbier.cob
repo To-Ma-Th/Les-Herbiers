@@ -582,7 +582,7 @@ STOP RUN.
            DISPLAY " "
        END-IF.
 
-       disconnect.
+       log_out.
 *> Permet de déconnecter l'utilisateur actuellement connecté.
 *>
 *> Variables utilisées :
