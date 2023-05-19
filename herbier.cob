@@ -140,6 +140,11 @@ WORKING-STORAGE SECTION.
        77 wUniquePlanteLatinName PIC 9(1).
        77 wNoPlante PIC 9(1).
        77 wSelectedplanteId PIC 9(3).
+       77 wCurrentPlantId PIC 9(3).
+       77 wPlantCount PIC 9(3).
+       77 wPlantTotalCount PIC 9(3).
+       77 wCurrentHerbierId PIC 9(3).
+       77 wEndOfZone PIC 9(1).
         
         
 PROCEDURE DIVISION.
@@ -197,8 +202,6 @@ MOVE 1 TO wIsAnonymous.
 PERFORM add_default_user_if_first_start.
 PERFORM last_herbier_id.
 PERFORM last_plante_id.
-
-
 
 STOP RUN.
 
@@ -1650,3 +1653,71 @@ STOP RUN.
            DELETE fplan RECORD
        END-READ
        CLOSE fplan.
+
+       display_plante_stats.
+*> Cette fonction permet d'afficher, pour la plante courante (dont l'id
+*> est contenu dans wCurrentPlantId), le nombre d'herbiers dans lesquels
+*> elle apparaît ainsi que leur nom, et son nombre total de précences.
+*>
+*> Variables utilisées :
+*> - wCurrentPlantId
+*> - wEndOfFile
+*> - wEndOfZone
+*> - wPlantCount
+*> - wPlantTotalCount
+*>
+*> Nombre de lectures : autant qu'il y a d'herbiers, plus autant qu'il y
+*> a de plantes dans les herbiers (on va faire une recherche séquen-
+*> tielle sur les herbiers, et pour chaque, on va faire une recherche
+*> sur zone sur les herbiers dans le fichier herbier_plante pour regar-
+*> der combien on a de plantes correspondant à celle recherchée).
+       MOVE 0 TO wEndOfFile
+       MOVE 0 TO wPlantTotalCount
+
+       DISPLAY "ID de l'herbier | Titre                          | ",
+               "Nombre de présences"
+       DISPLAY "----------------|--------------------------------|-",
+               "-------------------"
+       
+
+       OPEN INPUT fher
+       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+           READ fher
+           AT END      MOVE 1 TO wEndOfFile
+           NOT AT END
+              *> Recherche sur zone des plantes de l'herbier
+               MOVE fh_id TO fhpl_idHerbier
+               MOVE 0 TO wEndOfZone
+               MOVE 0 TO wPlantCount
+
+               OPEN INPUT fhpl
+               START fhpl, KEY IS = fhpl_idHerbier
+               INVALID KEY     MOVE 1 TO wEndOfZone
+               NOT INVALID KEY
+                   PERFORM WITH TEST AFTER UNTIL wEndOfZone = 1
+                       READ fhpl NEXT
+                       AT END      MOVE 1 TO wEndOfZone
+                       NOT AT END
+                           IF fhpl_idHerbier = fh_id
+                               IF fhpl_idPlante = wCurrentPlantId THEN
+                                   ADD 1 TO wPlantCount
+                               END-IF
+                           ELSE
+                              MOVE 1 TO wEndOfZone
+                           END-IF
+                       END-READ
+                   END-PERFORM
+               END-START
+               CLOSE fhpl
+
+               IF wPlantCount > 0 THEN
+                   DISPLAY "            ", fh_id, " | ", fh_nom, " | ",
+                           "                ", wPlantCount
+                   ADD wPlantCount TO wPlantTotalCount
+               END-IF
+           END-READ
+       END-PERFORM
+       CLOSE fher
+
+       DISPLAY " "
+       DISPLAY "Nombre de présences total : ", wPlantTotalCount.
