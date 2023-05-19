@@ -112,6 +112,7 @@ WORKING-STORAGE SECTION.
        77 l_h_id PIC 9(3).
        77 wEndOfFile PIC 9(1).
        77 wUtilisateursCount PIC 9(3).
+       77 wHerbierCount PIC 9(3).
        77 wMaxUserId PIC 9(3).
        77 wConnectedUser PIC 9(3).
        77 wExitProgramme PIC 9(1).
@@ -145,6 +146,7 @@ WORKING-STORAGE SECTION.
        77 wPlantTotalCount PIC 9(3).
        77 wCurrentHerbierId PIC 9(3).
        77 wEndOfZone PIC 9(1).
+       77 wAvgHerbierByUser PIC 9(3).
         
         
 PROCEDURE DIVISION.
@@ -215,13 +217,16 @@ STOP RUN.
 *> Variables utilisées :
 *> - l_h_id
 *> - wEndOfFile
+*> - wHerbierCount
        OPEN INPUT fher
        MOVE 0 TO wEndOfFile
+       MOVE 0 TO wHerbierCount
        MOVE 0 TO l_h_id
        PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
            READ fher
            AT END MOVE 1 TO wEndOfFile
            NOT AT END
+               ADD 1 TO wHerbierCount
                IF fh_id > l_h_id THEN
                    MOVE fh_id TO l_h_id
                END-IF
@@ -234,7 +239,8 @@ STOP RUN.
 *> Permet d'ajouter un herbier dans le fichier herbier
 *> 
 *> Variables utilisées :
-*> - l_h_id 
+*> - l_h_id
+*> - wHerbierCount
        DISPLAY "Nom de l'herbier ?"
        ACCEPT fh_nom
        MOVE wConnectedUser TO fh_utilisateur
@@ -247,6 +253,7 @@ STOP RUN.
            ACCEPT fh_type
        END-PERFORM
        ADD 1 TO l_h_id
+       ADD 1 TO wHerbierCount
        MOVE l_h_id TO fh_id
        OPEN I-O fher
        WRITE tamp_fher
@@ -257,7 +264,8 @@ STOP RUN.
 *> Permet de supprimer un herbier dans le fichier herbier
 *> 
 *> Variables utilisées :
-*> - l_h_id          
+*> - l_h_id
+*> - wHerbierCount
        OPEN I-O fhpl
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoHerbier
@@ -287,7 +295,7 @@ STOP RUN.
            DISPLAY "Cet herbier n'existe pas"
            MOVE 1 TO wNoHerbier
        NOT INVALID KEY 
-           ADD -1 TO l_h_id
+           ADD -1 TO wHerbierCount
            DELETE fher RECORD
        END-READ
        CLOSE fher.
@@ -487,6 +495,8 @@ STOP RUN.
            WRITE tamp_futil
            END-WRITE
            CLOSE futil
+
+           ADD 1 TO wUtilisateursCount
        END-IF.
 
        login.
@@ -617,6 +627,8 @@ STOP RUN.
 *> - wUniqueLogin
 *> - wLogin
 *> - wPassword
+*> - wMaxUserId
+*> - wUtilisateurCount
 *>
 *> Nombre de lectures : aucune
        MOVE 1 TO wUniqueLogin
@@ -1461,8 +1473,11 @@ STOP RUN.
 *> Permet de supprimer une plante dans le fichier plante
 *> 
 *> Variables utilisées :
-*> - wLastPlantId
-
+*> - wActionChosen
+*> - UniquePlanteName
+*> - ExitFunction
+*> - wPlantName
+*> - wUniquePlanteLatinName
        MOVE 0 TO wActionChosen
        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
                                  AND wActionChosen < 2
@@ -1619,7 +1634,9 @@ STOP RUN.
 *> Permet de supprimer une plante dans le fichier plante
 *> 
 *> Variables utilisées :
-*> - l_h_id          
+*> - wSelectedPlantId
+*> - wEndOfFile
+*> - wNoPlante          
        OPEN I-O fhpl
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoPlante
@@ -1649,7 +1666,7 @@ STOP RUN.
            DISPLAY "Cette plante n'existe pas"
            MOVE 1 TO wNoPlante
        NOT INVALID KEY 
-           ADD -1 TO wLastPlantId
+      *>     ADD -1 TO wLastPlantId
            DELETE fplan RECORD
        END-READ
        CLOSE fplan.
@@ -1721,3 +1738,22 @@ STOP RUN.
 
        DISPLAY " "
        DISPLAY "Nombre de présences total : ", wPlantTotalCount.
+
+       compute_average_herbier_by_user.
+*> Compte le nombre total d'herbiers, d'utilisateurs, et renvoie dans
+*> wAvgHerbierByUser le résultat du rapport du premier sur le second.
+*>
+*> Variables utilisées :
+*> - wEndOfFile
+*> - wAvgHerbierByUser
+*>
+*> Nombre de lectures : Aucune, on charge en mémoire le nombre d'herb-
+*> iers et d'utilisateurs au lancement et on en garde la trace au fil
+*> des manipulations de l'utilisateur
+       DIVIDE wHerbierCount BY wUtilisateursCount
+           GIVING wAvgHerbierByUser
+           SIZE ERROR
+               DISPLAY "Il faut au moins un utilisateur pour pouvoir ",
+                       "calculer le nombre moyen d'herbiers par ",
+                       "utilisateur !"
+       END-DIVIDE.
