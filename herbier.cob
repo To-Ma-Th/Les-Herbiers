@@ -114,6 +114,7 @@ WORKING-STORAGE SECTION.
        77 wUtilisateursCount PIC 9(3).
        77 wMaxUserId PIC 9(3).
        77 wConnectedUser PIC 9(3).
+       77 wConnectedUserRole PIC A(15).
        77 wExitProgramme PIC 9(1).
        77 wLoginTrialsCount PIC 9(1).
        77 wPassword PIC A(20).
@@ -124,10 +125,15 @@ WORKING-STORAGE SECTION.
 
        77 wNoHerbier PIC 9(1).
        77 wSelectedHerbierId PIC 9(3).
+       77 wSelectedHerbierType PIC A(20).
+       77 wLastHerbierPlantId PIC 9(3).
+       77 wNoHerbierPlante PIC 9(3).
        
        77 wActionChosen PIC 9(1).
        77 wValidInput PIC 9(1).
        77 wExitFunction PIC 9(1).
+       77 wInsertionPlante PIC 9(1).
+       77 wDeletePlante PIC 9(1).
 
        77 wLastPlantId PIC 9(3).
        77 wPlanteName PIC A(30).
@@ -140,6 +146,7 @@ WORKING-STORAGE SECTION.
        77 wUniquePlanteLatinName PIC 9(1).
        77 wNoPlante PIC 9(1).
        77 wSelectedplanteId PIC 9(3).
+       77 wDeletePlanteId PIC 9(3).
         
         
 PROCEDURE DIVISION.
@@ -197,6 +204,7 @@ MOVE 1 TO wIsAnonymous.
 PERFORM add_default_user_if_first_start.
 PERFORM last_herbier_id.
 PERFORM last_plante_id.
+PERFORM last_herbier_plante_id.
 
 
 
@@ -1650,3 +1658,189 @@ STOP RUN.
            DELETE fplan RECORD
        END-READ
        CLOSE fplan.
+       
+       add_herbier_plante.
+*> Permet d'ajouter une plante dans un herbier avec herbier_plante
+*> 
+*> Variables utilisées :
+*> - wSelectedHerbierId
+*> - wSelectedHerbierType
+*> - wLastHerbierPlantId
+*>
+       IF wSelectedHerbierType = CONST_HERBIER_LEAF 
+        OR wSelectedHerbierType = CONST_HERBIER_FLOWER THEN
+         MOVE wSelectedHerbierType TO wTypePlante
+         PERFORM display_plantes_type
+       ELSE
+         PERFORM display_plantes
+       END-IF
+       
+       PERFORM WITH TEST AFTER UNTIL wInsertionPlante = 1
+           DISPLAY "Veuillez saisir l'identifiant de la plante que", 
+           "que vous souhaitez ajouter à l'herbier :"
+           ACCEPT wSelectedPlanteId
+           IF wSelectedHerbierType = CONST_HERBIER_LEAF OR 
+            wSelectedHerbierType = CONST_HERBIER_FLOWER THEN
+               PERFORM check_plante_right_type
+           END-IF
+           
+           IF wSelectedHerbierType = CONST_HERBIER_MIXTE THEN
+            MOVE 1 TO wInsertionPlante
+           END-IF
+       END-PERFORM
+
+       
+           DISPLAY "Quelle est la date de séchage de cueillette de",
+                   "la plante ? (format jj/mm/aaaa)"
+           ACCEPT fhpl_date
+           
+           DISPLAY "Quelle est la taille de la plante ceuillie",
+                   "en centimètre ?"
+           ACCEPT fhpl_taille
+           
+           DISPLAY "Quelle est le lieu où la plante a été ceuillie ?"
+           ACCEPT fhpl_lieu
+
+           ADD 1 TO wLastHerbierPlantId
+           MOVE wLastHerbierPlantId TO fhpl_id
+           MOVE wSelectedHerbierId TO fhpl_idHerbier
+           MOVE wSelectedPlanteId TO fhpl_idPlante
+
+           OPEN I-O fhpl
+           WRITE tamp_fhpl
+           END-WRITE
+           CLOSE fhpl.
+       
+       check_plante_right_type.
+*> Vérifie que le type de la plante dans wSelectedPlanteId correspond au
+*> type dans wSelectedHerbierType.
+*> Le résultat est stocké dans wInsertionPlante
+*>
+*> Variables utilisées :
+*> - wSelectedPlanteId
+*> - wSelectedHerbierType
+*> - wInsertionPlante
+       MOVE 0 TO wInsertionPlante
+       MOVE wSelectedPlanteId TO pl_id
+
+       OPEN INPUT fplan
+       READ fplan
+       KEY IS pl_id
+           INVALID KEY     MOVE 0 TO wInsertionPlante
+           NOT INVALID KEY 
+             IF pl_type = wSelectedHerbierType THEN
+              MOVE 1 TO wInsertionPlante
+             END-IF
+       END-READ
+       CLOSE fplan.
+       
+       last_herbier_plante_id.
+*> Parcourt le fichier herbier_plante à la recherche du plus grand id. 
+*> Une foistrouvé, on le stocke dans wLastHerbierPlantId
+*>
+*> Variables utilisées :
+*> - wLastHerbierPlantId
+*> - wEndOfFile
+*>
+*> Nombre de lectures : autant qu'il y a de plantes dans le fichier
+*> plante.
+       OPEN INPUT fhpl
+       MOVE 0 TO wEndOfFile
+       MOVE 0 TO wLastHerbierPlantId
+       PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+           READ fhpl
+           AT END MOVE 1 TO wEndOfFile
+           NOT AT END
+               IF fhpl_id > wLastHerbierPlantId THEN
+                   MOVE fhpl_id TO wLastHerbierPlantId
+               END-IF
+           END-READ
+       END-PERFORM
+       CLOSE fhpl.
+       
+       display_herbier_plantes.
+*> Affiche sous la forme d'une table les plantes contenue dans un 
+*> herbier.
+*>
+*> Variables utilisées :
+*> - wNoHerbierPlante
+*>
+*> Nombre de lectures : Autant qu'il y a de plantes dans l'appli
+       MOVE 0 TO wNoHerbierPlante
+       MOVE wSelectedHerbierId TO fhpl_idHerbier
+       
+       OPEN INPUT fhpl
+       START fhpl, KEY IS = fhpl_idHerbier
+       INVALID KEY
+           DISPLAY "Aucune plante pour l'herbier cherché"
+           MOVE 0 TO wNoHerbierPlante
+       NOT INVALID KEY
+       	   MOVE 1 TO wNoHerbierPlante
+           PERFORM display_plantes_table_header
+           PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
+               READ fhpl NEXT
+               AT END      MOVE 1 TO wEndOfFile
+               NOT AT END
+                   IF wSelectedHerbierId = fhpl_idHerbier THEN
+                       PERFORM display_plantes_table_line
+                   ELSE
+                       MOVE 1 TO wEndOfFile
+                   END-IF
+               END-READ
+           END-PERFORM
+       END-START
+       CLOSE fhpl.
+       
+       delete_herbier_plante.
+*> Permet de supprimer une plante d'un herbier dans le fichier
+*> herbier_plante.
+*> 
+*> Variables utilisées :
+*> - l_h_id          
+       PERFORM display_herbier_plantes
+       
+       IF wNoHerbierPlante = 1 THEN 
+       	PERFORM WITH TEST AFTER UNTIL wDeletePlante = 1
+           DISPLAY "Veuillez saisir l'identifiant de la plante que", 
+           "que vous souhaitez supprimer de l'herbier :"
+           ACCEPT wSelectedPlanteId
+           PERFORM check_plant_in_herbier
+        END-PERFORM
+        
+        OPEN I-O fhpl
+        MOVE 0 TO wNoPlante
+        MOVE wDeletePlanteId TO fhpl_id
+        READ fhpl
+        INVALID KEY 
+           DISPLAY "Cette plante n'existe pas dans cet herbier"
+           MOVE 1 TO wNoPlante
+        NOT INVALID KEY 
+           ADD -1 TO wLastHerbierPlantId
+           DELETE fhpl RECORD
+        END-READ
+        CLOSE fhpl
+       END-IF.
+       
+       check_plant_in_herbier.
+*> Vérifie que la plante dans wSelectedPlanteId est une plante dans 
+*> dans l'herbier.
+*> Le résultat est stocké dans wDeletePlante
+*>
+*> Variables utilisées :
+*> - wSelectedPlanteId
+*> - wSelectedHerbierId
+*> - wDeletePlante
+       MOVE 0 TO wInsertionPlante
+       MOVE wSelectedHerbierId TO fhpl_idHerbier
+
+       OPEN INPUT fhpl
+       READ fhpl
+       KEY IS fhpl_idHerbier
+           INVALID KEY     MOVE 0 TO wDeletePlante
+           NOT INVALID KEY 
+             IF fhpl_idPlante = wSelectedPlanteId THEN
+              MOVE 1 TO wDeletePlante
+              MOVE fhpl_id TO wDeletePlanteId
+             END-IF
+       END-READ
+       CLOSE fhpl.
