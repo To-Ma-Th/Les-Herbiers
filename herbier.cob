@@ -147,8 +147,16 @@ WORKING-STORAGE SECTION.
        77 wCurrentHerbierId PIC 9(3).
        77 wEndOfZone PIC 9(1).
        77 wAvgHerbierByUser PIC 9(3).
-        
-        
+
+       77 wDateMonth PIC A(2).
+
+
+      *> Variables fonction distanciel
+       77 wDistUserType PIC A(15).
+       77 wDistMonth PIC A(2).
+       77 wDistPlace PIC A(40).
+       
+       
 PROCEDURE DIVISION.
 
 *> Initialisation du programme (opérations à faire avant les interac-
@@ -1757,3 +1765,67 @@ STOP RUN.
                        "calculer le nombre moyen d'herbiers par ",
                        "utilisateur !"
        END-DIVIDE.
+
+       month_from_herbier.
+*> Fonction permettant de récupérer le mois depuis une date entière.
+*>
+*> Variables utilisées :
+*> - wDateMonth
+*>
+*> Nombre de lectures : aucune
+       MOVE fh_date(5:6) TO wDateMonth.
+
+*> FONCTION DISTANCIEL :
+       herbier_name_from_month_and_user_type_with_plant_origin.
+*> Pour un type d'utilisateur stocké dans wDistUserType, affiche le nom
+*> des herbiers créés à un mois contenu dans wDistMonth avec au moins
+*> une plante cueillie dans le lieu contenu dans wDistPlace.
+*>
+*> Variables utilisées :
+*> - wDistUserType
+*> - wDistMonth
+*> - wDistPlace
+*> - wEndOfZone
+*> - wDateMonth
+*>
+*> Nombre de lectures : voir rendu distanciel
+       MOVE 0 TO wEndOfZone
+       MOVE wDistPlace TO fhpl_lieu
+
+      *> Lecture sur zone de herbier_plante (tri par lieu)
+       OPEN INPUT fhpl
+       START fhpl, KEY IS = fhpl_lieu
+       INVALID KEY     DISPLAY "Aucun herbier correspondant"
+       NOT INVALID KEY
+           PERFORM WITH TEST AFTER UNTIL wEndOfZone = 1
+               READ fhpl NEXT
+               AT END      MOVE 1 TO wEndOfZone
+               NOT AT END
+                   IF fhpl_lieu = wDistPlace THEN
+                      *> Lecture directe de l'herbier lié
+                       MOVE fhpl_idHerbier TO fh_id
+                       OPEN INPUT fher
+                       READ fher
+                       NOT INVALID KEY
+                           PERFORM month_from_herbier
+                           IF wDateMonth = wDistMonth THEN
+                              *> Lecture directe de l'utilisateur lié
+                               MOVE fh_utilisateur TO fu_id
+                               OPEN INPUT futil
+                               READ futil
+                               NOT INVALID KEY
+                                   IF fu_type = wDistUserType THEN
+                                       DISPLAY fh_nom
+                                   END-IF
+                               END-READ
+                               CLOSE futil
+                           END-IF
+                       END-READ
+                       CLOSE fher
+                   ELSE
+                       MOVE 1 TO wEndOfZone
+                   END-IF
+               END-READ
+           END-PERFORM
+       END-START
+       CLOSE fhpl.
