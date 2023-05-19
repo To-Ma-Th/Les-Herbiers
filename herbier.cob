@@ -1777,13 +1777,7 @@ STOP RUN.
        END-IF
        
        MOVE wPlanteName TO pl_nom
-       MOVE wPlanteLatinName TO pl_nomLatin
-        
-       OPEN I-O fplan
-       READ fplan
-       NOT INVALID KEY     REWRITE tamp_fplan
-       END-READ
-       CLOSE fplan.
+       MOVE wPlanteLatinName TO pl_nomLatin.
        
        delete_plante.
 *> Permet de supprimer une plante dans le fichier plante
