@@ -71,7 +71,7 @@ FD futil.
                 
 FD fhpl.
        01 tamp_fhpl.
-           02 fhpl_id PIC 9(2).
+           02 fhpl_id PIC 9(3).
            02 fhpl_idHerbier PIC 9(3).
            02 fhpl_idPlante PIC 9(3).
            02 fhpl_date PIC A(15).
@@ -129,8 +129,9 @@ WORKING-STORAGE SECTION.
        77 wSelectedHerbierType PIC A(20).
        77 wLastHerbierPlantId PIC 9(3).
        77 wNoHerbierPlante PIC 9(3).
+       77 wHerbierExists PIC 9(1).
        
-       77 wActionChosen PIC 9(1).
+       77 wActionChosen PIC 9(2).
        77 wValidInput PIC 9(1).
        77 wExitFunction PIC 9(1).
        77 wInsertionPlante PIC 9(1).
@@ -147,11 +148,12 @@ WORKING-STORAGE SECTION.
        77 wUniquePlanteName PIC 9(1).
        77 wUniquePlanteLatinName PIC 9(1).
        77 wNoPlante PIC 9(1).
-       77 wSelectedplanteId PIC 9(3).
+       77 wSelectedPlanteId PIC 9(3).
+       77 wSelectedPlanteHerbierId PIC 9(3).
        77 wDeletePlanteId PIC 9(3).
-       77 wCurrentPlantId PIC 9(3).
        77 wPlantCount PIC 9(3).
        77 wPlantTotalCount PIC 9(3).
+       77 wPlantExists PIC 9(1).
        77 wCurrentHerbierId PIC 9(3).
        77 wEndOfZone PIC 9(1).
        77 wAvgHerbierByUser PIC 9(3).
@@ -214,14 +216,31 @@ MOVE "------------------------------" TO CONST_DISPLAY_MENU.
 MOVE "Indiquez ce que vous souhaitez faire :" TO CONST_ACTION_SENTENCE.
 MOVE "Action impossible !" TO CONST_ACTION_IMPOSSIBLE.
 
+*> Initialisation des valeurs par défaut
 MOVE 1 TO wIsAnonymous.
+MOVE 0 TO wExitProgramme.
+MOVE 0 TO wSelectedHerbierId.
+MOVE " " TO wSelectedHerbierType
+MOVE CONST_ROLE_READER TO wConnectedUserRole.
 
-*> Insertion automatique d'un untilisateur s'il n'y en a pas déjà
+*> Insertion automatique d'un untilisateur s'il n'y en a pas déjà.
+*> Cette instruction permet aussi de récupérer le dernier identifiant
+*> des utilisateurs et leur nombre (voir count_utilisateurs).
 PERFORM add_default_user_if_first_start.
+
 *> Récupération des derniers identifiant de chaque fichier
 PERFORM last_herbier_id.
 PERFORM last_plante_id.
 PERFORM last_herbier_plante_id.
+
+*> Écran de bienvenue
+DISPLAY "Bienvenue dans l'application Les herbiers, un projet de ",
+        "l'association Herb'achat."
+DISPLAY " "
+DISPLAY "Cette application ne gère pas encore les accents, ainsi, pour",
+        " éviter tout inconfort à l'utilisation (notamment des ",
+        "décalages graphiques), nous vous recommandons d'éviter d'en ",
+        "faire usage."
 *> Appel du menu général
 PERFORM display_global_menu.
 
@@ -238,6 +257,8 @@ STOP RUN.
 *> - l_h_id
 *> - wEndOfFile
 *> - wHerbierCount
+*>
+*> Nombre de lectures : Autant qu'il y a d'herbiers dans le fichier fher
        OPEN INPUT fher
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wHerbierCount
@@ -253,6 +274,24 @@ STOP RUN.
            END-READ
        END-PERFORM
        CLOSE fher.
+
+       check_herbier_exists.
+*> Fonction qui vérifie si il existe un enregistrement pour l'id d'herb-
+*> ier contenu dans wSelectedHerbierId.
+*>
+*> Variables utilisées :
+*> - wSelectedHerbierId
+*> - wHerbierExists
+*>
+*> Nombre de lectures : 1
+       MOVE wSelectedHerbierId TO fh_id
+
+       OPEN INPUT fher
+       READ fher
+       INVALID KEY         MOVE 0 TO wHerbierExists
+       NOT INVALID KEY     MOVE 1 TO wHerbierExists
+       END-READ
+       CLOSE fher.
        
        
        add_herbier.
@@ -262,6 +301,8 @@ STOP RUN.
 *> - l_h_id
 *> - wHerbierCount
 *> - wConnectedUser
+*>
+*> Nombre de lectures : aucune
        DISPLAY "Nom de l'herbier ?"
        ACCEPT fh_nom
        MOVE wConnectedUser TO fh_utilisateur
@@ -290,10 +331,15 @@ STOP RUN.
 *> - wEndOfFile
 *> - wNoHerbier
 *> - wSelectedHerbierId
-*> - wNoHerbier
-       OPEN I-O fhpl
+*>
+*> Nombre de lectures : autant qu'il y a de plantes dans l'herbier à
+*> supprimer, +1
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoHerbier
+
+      *> On commence par supprimer tous les enregistrements de fhpl liés
+      *> à l'herbier à supprimer
+       OPEN I-O fhpl
        MOVE wSelectedHerbierId TO fhpl_idHerbier
        START fhpl, KEY IS = fhpl_id
        INVALID KEY     MOVE 1 TO wNoHerbier
@@ -397,6 +443,9 @@ STOP RUN.
 *>
 *> Variables utilisées :
 *> - wEndOfFile
+*> - l_h_id
+*>
+*> Nombre de lectures :
        IF l_h_id = 0 THEN
           DISPLAY "Aucun herbier"
        ELSE
@@ -424,20 +473,23 @@ STOP RUN.
 *> Variables utilisées :
 *> - wEndOfFile
 *> - wConnectedUser    
-*> - wNoHerbier    
-       OPEN INPUT fher
+*> - wNoHerbier
+*>
+*> Nombre de lectures : autant que l'utilisateur n'a d'herbiers
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoHerbier
        MOVE wConnectedUser TO fh_utilisateur
+
+       OPEN INPUT fher
        START fher, KEY IS = fh_utilisateur
        INVALID KEY 
-           DISPLAY "Vous n'avez pas créer d'herbier"
+           DISPLAY "Vous n'avez pas créé d'herbier"
            MOVE 1 TO wNoHerbier
        NOT INVALID KEY
-       DISPLAY "ID  | Nom de l'herbier               | ",
-               "Type de l'herbier    "
-       DISPLAY "----|--------------------------------|-",
-               "---------------------"
+           DISPLAY "ID  | Nom de l'herbier               | ",
+                   "Type de l'herbier    "
+           DISPLAY "----|--------------------------------|-",
+                   "---------------------"
            PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
                READ fher NEXT
                AT END MOVE 1 TO wEndOfFile
@@ -451,112 +503,69 @@ STOP RUN.
            END-PERFORM
        END-START
        CLOSE fher.
-        
-       display_herbier_by_id.
-*> Permet d'afficher toutes les infos d'un herbier en fonction de son
-*> id
-*>
-*> Variables utilisées :
-*> - wNoHerbier
-*> - wSelectedHerbierId 
-*> - wConnectedUser           
-       PERFORM display_all_herbier
-       DISPLAY "Quel herbier voulez vous sélectionner ?"
-       ACCEPT wSelectedHerbierId
-        
-       OPEN INPUT fher
-       MOVE 0 TO wNoHerbier
-       MOVE wSelectedHerbierId TO fh_id
-       READ fher
-       INVALID KEY 
-           DISPLAY "Cet herbier n'existe pas"
-           MOVE 1 TO wNoHerbier
-       NOT INVALID KEY 
-           DISPLAY "ID  | Nom de l'herbier               | ",
-                   "Type de l'herbier    | Date de création | ",
-                   "ID de l'utilsateur  "
-           DISPLAY "----|--------------------------------|-",
-                   "---------------------|------------------|-"
-                   "--------------------"
-           DISPLAY fh_id, " | ", fh_nom, " | ", fh_type, " | ",
-                   fh_date , " | ", fh_utilisateur
-           IF fh_utilisateur = wConnectedUser THEN
-               DISPLAY "Cet herbier peut être modifié"
-           ELSE 
-               DISPLAY "Cet herbier ne peut pas être modifié"
-           END-IF
-       END-READ
-       CLOSE fher.
        
        display_admin_herbier_menu.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsque l'administrateur est connecté et veux consulter les herbiers.
+*> Affiche le menu administrateur pour les herbiers.
 *>
 *> Variables utilisées :
 *> - wActionChosen
 *> - wIsAnonymous
 *> - wConnectedUserRole
 *> - wAvgHerbierByUser
+*>
 *> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
 
        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
-                                 AND wActionChosen < 5
+                                 AND wActionChosen <= 3
            DISPLAY " "
            DISPLAY CONST_DISPLAY_MENU
            DISPLAY " "
 
-           IF wActionChosen > 4 OR wActionChosen < 0 THEN
+           IF wActionChosen > 3 OR wActionChosen < 0 THEN
                DISPLAY CONST_ACTION_IMPOSSIBLE
            END-IF
 
            
            IF wIsAnonymous = 0 THEN
-             IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
-               DISPLAY CONST_ACTION_SENTENCE
-               DISPLAY " "
+               IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
+                   DISPLAY CONST_ACTION_SENTENCE
+                   DISPLAY " "
 		
-               DISPLAY "        1 : consulter les herbiers"
-               DISPLAY "        2 : supprimer un herbier"
-               DISPLAY "        3 : gérer un herbier"
-               DISPLAY "        4 : consulter statistique"
+                   DISPLAY "        1 : consulter les herbiers"
+                   DISPLAY "        2 : gérer un herbier"
+                   DISPLAY "        3 : consulter les statistiques"
            
-               DISPLAY " "
-               DISPLAY "        0 : retourner au menu"
-               DISPLAY " "
-             END-IF
+                   DISPLAY " "
+                   DISPLAY "        0 : retourner au menu"
+                   DISPLAY " "
+               END-IF
            ELSE
-             PERFORM display_global_menu
+               EXIT
            END-IF
            ACCEPT wActionChosen
+           
            DISPLAY " "
        END-PERFORM
 
        EVALUATE wActionChosen
-       WHEN 0
-*> retour au menu global
-          PERFORM display_global_menu
        WHEN 1
- *> consulter les herbiers
-         PERFORM display_all_herbier
-         PERFORM display_herbier_menu
+          *> consulter les herbiers
+           PERFORM display_all_herbier
+           PERFORM display_admin_herbier_menu
        WHEN 2
- *> supprimer un herbier
-           PERFORM delete_herbier_menu_admin
-           PERFORM display_herbier_menu
-       WHEN 3
- *> gérer un herbier
+          *> gérer un herbier
            PERFORM display_update_herbier_admin
-           PERFORM display_herbier_menu
-       WHEN 4
- *> statistique 
+           PERFORM display_admin_herbier_menu
+       WHEN 3
+          *> statistique 
            PERFORM compute_average_herbier_by_user
-           DISPLAY "Nombre d'herbier moyen par utilisateur :", 
-           wAvgHerbierByUser
-           PERFORM display_herbier_menu
+           DISPLAY "Nombre d'herbier moyen par utilisateur : ", 
+                   wAvgHerbierByUser
+           PERFORM display_admin_herbier_menu
        END-EVALUATE.
        
-       display_herbier_menu.
+       display_herbier_gesture_menu.
 *> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
 *> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
 *>
@@ -568,253 +577,7 @@ STOP RUN.
        MOVE 0 TO wActionChosen
 
        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
-                                 AND wActionChosen < 4
-           DISPLAY " "
-           DISPLAY CONST_DISPLAY_MENU
-           DISPLAY " "
-
-           IF wActionChosen > 3 OR wActionChosen < 0 THEN
-               DISPLAY CONST_ACTION_IMPOSSIBLE
-           END-IF
-
-           
-           IF wIsAnonymous = 0 THEN
-             DISPLAY CONST_ACTION_SENTENCE
-             DISPLAY " "
-		
-             DISPLAY "        1 : consulter ses herbiers"
-             DISPLAY "        2 : consulter les plantes d'un herbier"
-             DISPLAY "        3 : gérer un herbier"
-           
-             DISPLAY " "
-             DISPLAY "        0 : retourner au menu"
-             DISPLAY " "
-           ELSE
-             PERFORM display_global_menu
-           END-IF
-           ACCEPT wActionChosen
-           DISPLAY " "
-       END-PERFORM
-
-       EVALUATE wActionChosen
-       WHEN 0
-*> retour au menu global
-          PERFORM display_global_menu
-       WHEN 1
- *> consulter ses herbiers
-         PERFORM display_user_herbier
-         PERFORM display_herbier_menu
-       WHEN 2
- *> consulter les plantes d'un herbier
-           PERFORM display_plante_herbier_utilisateur
-           PERFORM display_herbier_menu
-       WHEN 3
- *> gérer un herbier
-           PERFORM display_update_herbier_utilisateur
-           PERFORM display_herbier_menu
-       END-EVALUATE.
-       
-       display_plante_herbier_utilisateur.
-*> Fonction qui permet de sélectionner un herbier d'un
-*> utilisateur puis d'afficher toutes les plantes contenu dedans
-*>
-*> Variables utilisées :
-*> - wNoHerbier
-*> - wSelectedHerbierId
-*> - wHerbierUpdate
-*>
-*> Nombre de lectures : aucune       
-       PERFORM display_user_herbier
-       IF wNoHerbier = 0 THEN
-       
-          PERFORM WITH TEST AFTER UNTIL wHerbierUpdate = 1
-                                 
-           DISPLAY "Quel identifiant herbier souhaitez vous consulter"
-           ACCEPT wSelectedHerbierId
-           PERFORM check_herbier_be_update
-           IF wHerbierUpdate = 0 THEN
-              DISPLAY "Vous ne pouvez pas consulter cet herbier"
-           END-IF
-          END-PERFORM
-          DISPLAY " "
-          PERFORM display_herbier_plantes
-       END-IF.
-       
-       display_update_herbier_utilisateur.
-*> Fonction qui affiche qui permet de sélectionner un herbier d'un
-*> utilisateur puis d'afficher un menu qui pour modifier les infos
-*> de l'herbier, ajouter ou supprimer une plante de l'herbier ou 
-*> supprimer l'herbier
-*>
-*> Variables utilisées :
-*> - wNoHerbier
-*> - wHerbierUpdate
-*> - wSelectedHerbierId
-*> - wActionChosen
-*>
-*> Nombre de lectures : aucune
-       PERFORM display_user_herbier
-       IF wNoHerbier = 0 THEN
-       
-          PERFORM WITH TEST AFTER UNTIL wHerbierUpdate = 1
-                                 
-             DISPLAY "Quel identifiant herbier souhaitez vous consulter"
-             ACCEPT wSelectedHerbierId
-             PERFORM check_herbier_be_update
-                IF wHerbierUpdate = 0 THEN
-                   DISPLAY "Vous ne pouvez pas modifier cet herbier"
-                END-IF
-          END-PERFORM
-          DISPLAY " "
-          PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
-                                 AND wActionChosen < 5
-              DISPLAY " "
-              DISPLAY CONST_DISPLAY_MENU
-              DISPLAY " "
-
-              IF wActionChosen > 4 OR wActionChosen < 0 THEN
-                  DISPLAY CONST_ACTION_IMPOSSIBLE
-              END-IF
-
-           
-              IF wIsAnonymous = 0 THEN
-                DISPLAY CONST_ACTION_SENTENCE
-                DISPLAY " "
-		
-                DISPLAY "        1 : modifier les informations de",
-                                  "l'herbier"
-                DISPLAY "        2 : ajouter une plante à l'herbier"
-                DISPLAY "        3 : supprimer une plante de l'herbier"
-                DISPLAY "        3 : supprimer l'herbier"
-           
-                DISPLAY " "
-                DISPLAY "        0 : retourner au menu"
-                DISPLAY " "
-              ELSE
-                PERFORM display_global_menu
-              END-IF
-              ACCEPT wActionChosen
-              DISPLAY " "
-       END-PERFORM
-       
-       EVALUATE wActionChosen
-       WHEN 0
-*> retour au menu global
-          PERFORM display_global_menu
-       WHEN 1
- *> modifier les informations de l'herbier
-         PERFORM update_herbier
-         PERFORM display_herbier_menu
-       WHEN 2
- *> ajouter une plante à l'herbier
-           PERFORM display_herbier_plantes
-           PERFORM add_herbier_plante
-           PERFORM display_herbier_menu
-       WHEN 3
- *> supprimer une plante de l'herbier
-           PERFORM delete_herbier_plante
-           PERFORM display_herbier_menu
-       WHEN 4
- *> supprimerl'herbier
-           PERFORM delete_herbier_menu
-           PERFORM display_herbier_menu
-       END-EVALUATE
-       END-IF.
-       
-       delete_herbier_menu.
-*> Fonction qui permet de sélectionner un herbier d'un utilisateur
-*> puis de le supprime
-*>
-*> Variables utilisées :
-*> - wNoHerbier
-*> - wHerbierUpdate
-*> - wActionChosen
-*> - wSelectedHerbierId
-*>
-*> Nombre de lectures : aucune       
-       PERFORM display_user_herbier
-       IF wNoHerbier = 0 THEN
-       
-          PERFORM WITH TEST AFTER UNTIL wHerbierUpdate = 1
-                                 
-           DISPLAY "Quel identifiant herbier souhaitez vous supprimer"
-           ACCEPT wSelectedHerbierId
-           PERFORM check_herbier_be_update
-           IF wHerbierUpdate = 0 THEN
-              DISPLAY "Vous ne pouvez pas supprimer cet herbier"
-           END-IF
-          END-PERFORM
-          DISPLAY " "
-          PERFORM WITH TEST AFTER UNTIL wActionChosen = 0 OR
-          wActionChosen = 1
-                                 
-           DISPLAY "Souhaitez vous supprimer l'herbier ? 1 = oui,", 
-           " 0 = non"
-           ACCEPT wActionChosen
-          END-PERFORM
-          IF wActionChosen = 1 THEN
-             PERFORM delete_herbier
-          END-IF
-       END-IF.
-       
-       delete_herbier_menu_admin.
-*> Fonction qui permet de sélectionner un herbier d'un utilisateur
-*> puis de le supprime, pour les administrateurs
-*>
-*> Variables utilisées :
-*> - wNoHerbier
-*> - wActionChosen
-*> - wSelectedHerbierId
-*>
-*> Nombre de lectures : aucune       
-       PERFORM display_all_herbier
-       IF wNoHerbier = 0 THEN
-       
-          PERFORM WITH TEST AFTER UNTIL wSelectedHerbierId > 0 AND 
-          wSelectedHerbierId <= l_h_id
-                                 
-           DISPLAY "Quel identifiant herbier souhaitez vous supprimer"
-           ACCEPT wSelectedHerbierId
-           
-          END-PERFORM
-          DISPLAY " "
-          PERFORM WITH TEST AFTER UNTIL wActionChosen = 0 OR
-          wActionChosen = 1
-                                 
-           DISPLAY "Souhaitez vous supprimer l'herbier ? 1 = oui,", 
-           " 0 = non"
-           ACCEPT wActionChosen
-          END-PERFORM
-          IF wActionChosen = 1 THEN
-             PERFORM delete_herbier
-          END-IF
-       END-IF.
-       
-       display_update_herbier_admin.
-*> Fonction qui affiche qui permet de sélectionner un herbier d'un
-*> utilisateur puis d'afficher un menu qui pour modifier les infos
-*> de l'herbier, ajouter ou supprimer une plante de l'herbier ou 
-*> supprimer l'herbier, pour les administrateurs
-*>
-*> Variables utilisées :
-*> - wActionChosen
-*> - wIsAnonymous
-*> - wConnectedUserRole
-*> - wSelectedHerbierId
-*>
-*> Nombre de lectures : aucune
-       PERFORM display_all_herbier
-       IF wNoHerbier = 0 THEN
-       
-          PERFORM WITH TEST AFTER UNTIL wSelectedHerbierId > 0 AND 
-          wSelectedHerbierId <= l_h_id
-                                 
-           DISPLAY "Quel identifiant herbier souhaitez vous consulter"
-           ACCEPT wSelectedHerbierId
-          END-PERFORM
-          DISPLAY " "
-          PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
-                                 AND wActionChosen < 5
+                                 AND wActionChosen <= 4
            DISPLAY " "
            DISPLAY CONST_DISPLAY_MENU
            DISPLAY " "
@@ -825,61 +588,361 @@ STOP RUN.
 
            
            IF wIsAnonymous = 0 THEN
-             DISPLAY CONST_ACTION_SENTENCE
-             DISPLAY " "
+               DISPLAY CONST_ACTION_SENTENCE
+               DISPLAY " "
 		
-             DISPLAY "        1 : modifier les informations de l'herbier"
-             DISPLAY "        2 : ajouter une plante à l'herbier"
-             DISPLAY "        3 : supprimer une plante de l'herbier"
-             DISPLAY "        3 : supprimer l'herbier"
+               DISPLAY "        1 : consulter ses herbiers"
+               DISPLAY "        2 : consulter les plantes d'un herbier"
+               DISPLAY "        3 : créer un herbier"
+               DISPLAY "        4 : gérer un de ses herbiers"
            
-             DISPLAY " "
-             DISPLAY "        0 : retourner au menu"
-             DISPLAY " "
+               DISPLAY " "
+               DISPLAY "        0 : retourner au menu"
+               DISPLAY " "
            ELSE
-             PERFORM display_global_menu
+               EXIT
            END-IF
            ACCEPT wActionChosen
            DISPLAY " "
        END-PERFORM
-       
+
        EVALUATE wActionChosen
-       WHEN 0
-*> retour au menu global
-          PERFORM display_global_menu
        WHEN 1
- *> modifier les informations de l'herbier
-         PERFORM update_herbier
-         PERFORM display_herbier_menu
+          *> consulter ses herbiers
+           PERFORM display_user_herbier
+           PERFORM display_herbier_gesture_menu
        WHEN 2
- *> ajouter une plante à l'herbier
-           PERFORM display_herbier_plantes
-           PERFORM add_herbier_plante
-           PERFORM display_herbier_menu
+          *> consulter les plantes d'un herbier
+           PERFORM display_plante_herbier_utilisateur
+           PERFORM display_herbier_gesture_menu
        WHEN 3
- *> supprimer une plante de l'herbier
-           PERFORM delete_herbier_plante
-           PERFORM display_herbier_menu
+          *> créer un herbier
+           PERFORM add_herbier
+           PERFORM display_herbier_gesture_menu
        WHEN 4
- *> supprimerl'herbier
-           PERFORM delete_herbier_menu
+          *> gérer ses herbiers
+           PERFORM display_update_herbier_utilisateur
+           PERFORM display_herbier_gesture_menu
+       END-EVALUATE.
+
+       display_herbier_menu.
+*> Affiche un menu permettant à n'importe qui de consulter les herbiers
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM display_all_herbier
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen <= 1
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 1 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+		
+           DISPLAY "        1 : consulter les plantes d'un herbier"
+           
+           DISPLAY " "
+           DISPLAY "        0 : retourner au menu"
+           DISPLAY " "
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 1
+          *> consulter ses herbiers
+           PERFORM display_plante_herbier
            PERFORM display_herbier_menu
-       END-EVALUATE
+       END-EVALUATE.
+
+       display_plante_herbier.
+*> Fonction qui permet de sélectionner un herbier et d'afficher toutes
+*> les plantes qu'il contient.
+*>
+*> Variables utilisées :
+*> - wHerbierExists
+*> - wSelectedHerbierId
+*> - wSelectedHerbierType
+*>
+*> Nombre de lectures : aucune
+       MOVE 1 TO wHerbierExists
+
+       PERFORM WITH TEST AFTER UNTIL wHerbierExists = 1
+           IF wHerbierExists = 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE, " Aucun herbier avec ",
+                       "cet identifiant n'a pu être trouvé."
+           END-IF
+
+           DISPLAY "Entrez l'identifiant de l'herbier que vous ",
+                   "souhaitez consulter"
+           ACCEPT wSelectedHerbierId
+           MOVE " " TO wSelectedHerbierType
+
+           PERFORM check_herbier_exists
+       END-PERFORM
+
+       DISPLAY " "
+       PERFORM display_herbier_plantes
+
+      *> Cette fonction ne doit pas conserver les éléments sélectionnés
+       MOVE 0 TO wSelectedHerbierId
+       MOVE " " TO wSelectedHerbierType.
+       
+       display_plante_herbier_utilisateur.
+*> Fonction qui permet de sélectionner un herbier d'un
+*> utilisateur puis d'afficher toutes les plantes contenues dedans
+*>
+*> Variables utilisées :
+*> - wNoHerbier
+*> - wSelectedHerbierId
+*> - wSelectedHerbierType
+*> - wHerbierUpdate
+*>
+*> Nombre de lectures : aucune       
+       PERFORM display_user_herbier
+       IF wNoHerbier = 0 THEN
+       
+          PERFORM WITH TEST AFTER UNTIL wHerbierUpdate = 1
+                                 
+           DISPLAY "Quel identifiant herbier souhaitez vous consulter"
+           ACCEPT wSelectedHerbierId
+           MOVE " " TO wSelectedHerbierType
+
+           PERFORM check_herbier_be_update
+           IF wHerbierUpdate = 0 THEN
+              DISPLAY "Vous ne pouvez pas consulter cet herbier"
+           END-IF
+          END-PERFORM
+          DISPLAY " "
+          PERFORM display_herbier_plantes
+       END-IF
+       
+      *> Cette fonction ne doit pas conserver les sélecteurs
+       MOVE 0 TO wSelectedHerbierId
+       MOVE " " TO wSelectedHerbierType.
+       
+       display_update_herbier_utilisateur.
+*> Fonction qui permet de sélectionner un herbier puis afficher un menu
+*> proposant des opéarations CRUD sur les plantes de l'herbier et sur
+*> l'herbier lui-même.
+*> Cette fonction est destinée à être utilisée uniquement pour gérer les
+*> herbiers appartenant à l'utilisateur courant (connecté).
+*>
+*> Variables utilisées :
+*> - wNoHerbier
+*> - wHerbierUpdate
+*> - wSelectedHerbierId
+*> - wSelectedHerbierType
+*> - wActionChosen
+*> - wIsAnonymous
+*>
+*> Nombre de lectures : aucune
+       PERFORM display_user_herbier
+       IF wNoHerbier = 0 THEN
+       
+           IF wSelectedHerbierId = 0 THEN
+               PERFORM WITH TEST AFTER UNTIL wHerbierUpdate = 1
+                                     
+                   DISPLAY "Entrez l'identifiant de l'herbier à gérer"
+                   ACCEPT wSelectedHerbierId
+                   MOVE " " TO wSelectedHerbierType
+
+                   PERFORM check_herbier_be_update
+                   IF wHerbierUpdate = 0 THEN
+                       DISPLAY "Vous ne pouvez pas modifier cet herbier"
+                   ELSE
+                       MOVE fh_type TO wSelectedHerbierType
+                   END-IF
+               END-PERFORM
+           END-IF
+           
+           DISPLAY " "
+           PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                     AND wActionChosen < 5
+               DISPLAY " "
+               DISPLAY CONST_DISPLAY_MENU
+               DISPLAY " "
+
+               IF wActionChosen > 4 OR wActionChosen < 0 THEN
+                   DISPLAY CONST_ACTION_IMPOSSIBLE
+               END-IF
+
+           
+               IF wIsAnonymous = 0 THEN
+                   DISPLAY CONST_ACTION_SENTENCE
+                   DISPLAY " "
+		
+                   DISPLAY "        1 : modifier les informations de ",
+                           "l'herbier"
+                   DISPLAY "        2 : ajouter une plante à l'herbier"
+                   DISPLAY "        3 : supprimer une plante de ",
+                           "l'herbier"
+                   DISPLAY "        4 : supprimer l'herbier"
+           
+                   DISPLAY " "
+                   DISPLAY "        0 : retourner au menu"
+                   DISPLAY " "
+               ELSE
+                   EXIT
+               END-IF
+               ACCEPT wActionChosen
+               DISPLAY " "
+           END-PERFORM
+       
+           EVALUATE wActionChosen
+           WHEN 1
+              *> modifier les informations de l'herbier
+               PERFORM update_herbier
+               PERFORM display_update_herbier_utilisateur
+           WHEN 2
+              *> ajouter une plante à l'herbier
+               PERFORM add_herbier_plante
+               PERFORM display_update_herbier_utilisateur
+           WHEN 3
+              *> supprimer une plante de l'herbier
+               PERFORM delete_herbier_plante
+               PERFORM display_update_herbier_utilisateur
+           WHEN 4
+              *> supprimerl'herbier
+               PERFORM delete_herbier_menu
+               IF NOT wSelectedHerbierId = 0 THEN
+                   PERFORM display_update_herbier_utilisateur
+               END-IF
+           END-EVALUATE
+       END-IF.
+       
+       delete_herbier_menu.
+*> Fonction qui affiche une confirmation avant de lancer la suppression
+*> de l'herbier dans wSelectedHerbierId
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wSelectedHerbierId
+*>
+*> Nombre de lectures : aucune
+       PERFORM WITH TEST AFTER UNTIL wActionChosen = 0
+                                  OR wActionChosen = 1
+                                 
+           DISPLAY "Souhaitez vous supprimer l'herbier ? 1 = oui,", 
+                   " 0 = non"
+           ACCEPT wActionChosen
+       END-PERFORM
+
+       IF wActionChosen = 1 THEN
+           PERFORM delete_herbier
+           MOVE 0 TO wSelectedHerbierId
+       END-IF.
+       
+       display_update_herbier_admin.
+*> Fonction qui permet de sélectionner n'importe quel herbier et d'af-
+*> ficher un menu pour le gérer (opérations CRUD).
+*> Ce menu ne devrait être accessible que pour les administrateurs.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
+*> - wSelectedHerbierId
+*> - wSelectedHerbierType
+*> - wNoHerbier
+*> - l_h_id
+*>
+*> Nombre de lectures : aucune
+       PERFORM display_all_herbier
+       IF wNoHerbier = 0 THEN
+           IF wSelectedHerbierId = 0 THEN
+               PERFORM WITH TEST AFTER UNTIL wSelectedHerbierId > 0
+                                         AND wSelectedHerbierId <=l_h_id
+                                 
+                   DISPLAY "Quel identifiant herbier souhaitez vous consulter"
+                   ACCEPT wSelectedHerbierId
+                   MOVE " " TO wSelectedHerbierType
+
+               END-PERFORM
+           END-IF
+          
+           DISPLAY " "
+           PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                     AND wActionChosen < 5
+               DISPLAY " "
+               DISPLAY CONST_DISPLAY_MENU
+               DISPLAY " "
+
+               IF wActionChosen > 4 OR wActionChosen < 0 THEN
+                   DISPLAY CONST_ACTION_IMPOSSIBLE
+               END-IF
+
+           
+               IF wIsAnonymous = 0 THEN
+                   DISPLAY CONST_ACTION_SENTENCE
+                   DISPLAY " "
+		
+                   DISPLAY "        1 : modifier les informations de ",
+                           "l'herbier"
+                   DISPLAY "        2 : ajouter une plante à l'herbier"
+                   DISPLAY "        3 : supprimer une plante de ",
+                           "l'herbier"
+                   DISPLAY "        4 : supprimer l'herbier"
+           
+                   DISPLAY " "
+                   DISPLAY "        0 : retourner au menu"
+                   DISPLAY " "
+               ELSE
+                   EXIT
+               END-IF
+               ACCEPT wActionChosen
+               
+               DISPLAY " "
+           END-PERFORM
+       
+           EVALUATE wActionChosen
+           WHEN 1
+              *> modifier les informations de l'herbier
+               PERFORM update_herbier
+               PERFORM display_update_herbier_admin
+           WHEN 2
+              *> ajouter une plante à l'herbier
+               PERFORM display_herbier_plantes
+               PERFORM add_herbier_plante
+               PERFORM display_update_herbier_admin
+           WHEN 3
+              *> supprimer une plante de l'herbier
+               PERFORM delete_herbier_plante
+               PERFORM display_update_herbier_admin
+           WHEN 4
+              *> supprimer l'herbier
+               PERFORM delete_herbier_menu
+               IF NOT wSelectedHerbierId = 0 THEN
+                   PERFORM display_update_herbier_admin
+               END-IF
+           END-EVALUATE
        END-IF.
        
        check_herbier_be_update.
-*> Permet de vérifier si l'herbier selectionné peut être modifier par
-*> l'utilisateur
+*> Permet de vérifier si l'herbier selectionné peut être modifié par
+*> l'utilisateur connecté
 *>
 *> Variables utilisées :
 *> - wConnectedUser
 *> - wSelectedHerbierId 
 *> - wNoHerbier  
-*> - wHerbierUpdate         
-        
-       OPEN INPUT fher
+*> - wHerbierUpdate  
+*>      
+*> Nombre de lectures : 1
        MOVE 0 TO wNoHerbier
        MOVE wSelectedHerbierId TO fh_id
+
+       OPEN INPUT fher
        READ fher
        INVALID KEY 
            DISPLAY "Cet herbier n'existe pas"
@@ -892,8 +955,6 @@ STOP RUN.
            END-IF
        END-READ
        CLOSE fher.
-  
-*> utilisateur
 
        count_utilisateurs.
 *> Compte le nombre d'utilisateurs présents dans la fichier utilisateurs
@@ -907,10 +968,11 @@ STOP RUN.
 *>
 *> Nombre de lectures :
 *> - Autant qu'il y a d'utilisateurs dans le fichiers utilisateurs
-       OPEN INPUT futil
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wUtilisateursCount
        MOVE 0 TO wMaxUserId
+
+       OPEN INPUT futil
        PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
            READ futil
            AT END          MOVE 1 TO wEndOfFile
@@ -1006,6 +1068,7 @@ STOP RUN.
            MOVE 1 TO wExitProgramme
        END-IF
        IF NOT wConnectedUser = 0 THEN
+           DISPLAY " "
            DISPLAY "Vous êtes connecté en tant que :"
            PERFORM display_user_info
            DISPLAY " "
@@ -1017,10 +1080,12 @@ STOP RUN.
 *> Variables utilisées :
 *> - wConnectedUser
 *> - wIsAnonymous
+*> - wConnectedUserRole
 *>
 *> Nombre de lectures : aucune
        MOVE 0 TO wConnectedUser
-       MOVE 1 TO wIsAnonymous.
+       MOVE 1 TO wIsAnonymous
+       MOVE CONST_ROLE_READER TO wConnectedUserRole.
 
        check_connection.
 *> Vérifie si l'utilisateur est connecté.
@@ -1042,7 +1107,7 @@ STOP RUN.
            ELSE
       *> On a détecté un cas qui ne devrait pas arriver, alors
       *> on ferme la connexion par précaution.
-               MOVE 0 TO wConnectedUser
+               PERFORM log_out
            END-IF
        END-READ
        CLOSE futil.
@@ -1085,14 +1150,15 @@ STOP RUN.
        CLOSE futil.
 
        sign_in.
-*> Permet à un utilisateur de poser une candidature en tant qu'éditeur.
+*> Permet à un utilisateur de poser une candidature pour obtenir un
+*> compte.
 *>
 *> Variables utilisées :
 *> - wUniqueLogin
 *> - wLogin
 *> - wPassword
 *> - wMaxUserId
-*> - wUtilisateurCount
+*> - wUtilisateursCount
 *>
 *> Nombre de lectures : aucune
        MOVE 1 TO wUniqueLogin
@@ -1204,9 +1270,6 @@ STOP RUN.
        END-PERFORM
 
        EVALUATE wActionChosen
-       WHEN 0
-*> retour à la page d'accueil
-          PERFORM display_admin_user_menu
        WHEN 1
           *> passage de l'utilisateur en tant qu'éditeur
            PERFORM accept_user_editor
@@ -1487,15 +1550,12 @@ STOP RUN.
        END-PERFORM
 
        EVALUATE wActionChosen
-       WHEN 0
-*> retour à la page d'accueil
-          PERFORM display_admin_user_menu
        WHEN 1
-*> modification du login
+          *> modification du login
            PERFORM update_self_login
            PERFORM display_account_menu
        WHEN 2
-*> suppression du mot de passe
+          *> suppression du mot de passe
            PERFORM update_self_password
            PERFORM display_account_menu
        END-EVALUATE.
@@ -1553,15 +1613,14 @@ STOP RUN.
        CLOSE futil.
 
        update_user_menu.
-*> Permet de modifier un utilisateur. Cependant, l'ID et le login ne
-*> peuvent pas être modifiés !
+*> Permet de sélectionner l'utilisateur à modifier
 *>
 *> Variables utilisées :
 *> - wValidInput
 *> - wExitFunction
 *> - wLogin
 *>
-*> Nombre de lectures : 1
+*> Nombre de lectures : 2
        MOVE 1 TO wValidInput
        MOVE 0 TO wExitFunction
        
@@ -1603,7 +1662,8 @@ STOP RUN.
        END-IF.
 
        update_user.
-*> Modifie réellement un utilisateur.
+*> Permet de modifier un utilisateur. Cependant, l'ID et le login ne
+*> peuvent pas être modifiés !
 *>
 *> Variables utilisées :
 *> - wActionChosen
@@ -1694,7 +1754,7 @@ STOP RUN.
 *> - wLogin
 *> - wConnectedUser
 *>
-*> Nombre de lectures : 1
+*> Nombre de lectures : 2
        MOVE 1 TO wValidInput
        MOVE 0 TO wExitFunction
        
@@ -1709,7 +1769,7 @@ STOP RUN.
                        "actuellement connecté."
            END-IF
 
-           DISPLAY "Entrez le login de l'utilisateur à modifier ou 0 ",
+           DISPLAY "Entrez le login de l'utilisateur à supprimer ou 0 ",
                    "pour revenir en arrière."
            ACCEPT wLogin
            DISPLAY " "
@@ -1769,8 +1829,8 @@ STOP RUN.
            DISPLAY CONST_ACTION_SENTENCE
            DISPLAY " "
 
-           DISPLAY "        1 : gérer les utilisateurs en attentes"
-           DISPLAY "        2 : gérer tout les utilisateur"
+           DISPLAY "        1 : gérer les utilisateurs en attente"
+           DISPLAY "        2 : gérer tous les utilisateurs"
            DISPLAY " "
            DISPLAY "        0 : retourner à la page d'acceuil"
            DISPLAY " "
@@ -1780,20 +1840,15 @@ STOP RUN.
        END-PERFORM
 
        EVALUATE wActionChosen
-       WHEN 0
-*> retour à la page d'accueil
-           PERFORM display_global_menu
        WHEN 1
 *> modification d'un utilisateur
            PERFORM display_waiting_users_menu
            PERFORM display_admin_user_menu
        WHEN 2
 *> suppression d'un utilisateur
-           PERFORM delete_user_menu
+           PERFORM display_users_menu
            PERFORM display_admin_user_menu
        END-EVALUATE.
-
-*> plante
 
        last_plante_id.
 *> Parcourt le fichier plante à la recherche du plus grand id. Une fois
@@ -1805,9 +1860,10 @@ STOP RUN.
 *>
 *> Nombre de lectures : autant qu'il y a de plantes dans le fichier
 *> plante.
-       OPEN INPUT fplan
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wLastPlantId
+
+       OPEN INPUT fplan
        PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
            READ fplan
            AT END MOVE 1 TO wEndOfFile
@@ -1817,6 +1873,24 @@ STOP RUN.
                END-IF
            END-READ
        END-PERFORM
+       CLOSE fplan.
+
+       check_plant_exists.
+*> Fonction qui vérifie si il existe un enregistrement pour l'id de
+*> plante contenu dans wSelectedPlanteId.
+*>
+*> Variables utilisées :
+*> - wSelectedPlanteId
+*> - wPlantExists
+*>
+*> Nombre de lectures : 1
+       MOVE wSelectedPlanteId TO pl_id
+
+       OPEN INPUT fplan
+       READ fplan
+       INVALID KEY         MOVE 0 TO wPlantExists
+       NOT INVALID KEY     MOVE 1 TO wPlantExists
+       END-READ
        CLOSE fplan.
 
        check_unique_plante_name.
@@ -1897,7 +1971,6 @@ STOP RUN.
 *> - wExitFunction
 *> - wPlanteName
 *> - wPlanteLatinName
-*> - wActionChosen
 *> - wHabitat
 *> - wLastPlantId
 *>
@@ -2089,7 +2162,7 @@ STOP RUN.
 *> Permet de mettre une plante à jour dans le fichier plante.
 *>
 *> Variables utilisées :
-*> - wSelectedPlantId
+*> - wSelectedPlanteId
 *>
 *> Nombre de lectures : 1
        MOVE wSelectedPlanteId TO pl_id
@@ -2109,10 +2182,11 @@ STOP RUN.
 *> 
 *> Variables utilisées :
 *> - wActionChosen
-*> - UniquePlanteName
-*> - ExitFunction
-*> - wPlantName
+*> - wUniquePlanteName
+*> - wExitFunction
+*> - wPlanteName
 *> - wUniquePlanteLatinName
+*> - wPlanteLatinName
 *>
 *> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
@@ -2133,18 +2207,22 @@ STOP RUN.
            MOVE 0 TO wExitFunction
            PERFORM WITH TEST AFTER UNTIL wUniquePlanteName = 1
                                           OR wExitFunction = 1
-                IF wUniquePlanteName = 0 THEN
-                       DISPLAY "Ce nom de plante existe déjà."
-                       DISPLAY " "
-                       PERFORM keep_going
-                   END-IF
+               IF wUniquePlanteName = 0 THEN
+                   DISPLAY "Ce nom de plante existe déjà."
+                   DISPLAY " "
+                   PERFORM keep_going
+               END-IF
 
-                   IF NOT wExitFunction = 1 THEN
-                       DISPLAY "Veuillez saisir le nom de votre plante"
-                       ACCEPT wPlanteName
-                       PERFORM check_unique_plante_name
-                   END-IF
-          END-PERFORM
+               IF NOT wExitFunction = 1 THEN
+                   DISPLAY "Veuillez saisir le nom de votre plante"
+                   ACCEPT wPlanteName
+                   PERFORM check_unique_plante_name
+               END-IF
+           END-PERFORM
+
+           IF wExitFunction = 0 THEN
+               MOVE wPlanteName TO pl_nom
+           END-IF
        END-IF
         
        MOVE 0 TO wActionChosen
@@ -2160,11 +2238,10 @@ STOP RUN.
            ACCEPT wActionChosen
        END-PERFORM
        
-        IF wActionChosen = 1 THEN
+       IF wActionChosen = 1 THEN
            MOVE 1 TO wUniquePlanteLatinName
            MOVE 0 TO wExitFunction
-           IF NOT wExitFunction = 1 THEN
-            PERFORM WITH TEST AFTER UNTIL wUniquePlanteLatinName = 1
+           PERFORM WITH TEST AFTER UNTIL wUniquePlanteLatinName = 1
                                       OR wExitFunction = 1
                IF wUniquePlanteLatinName = 0 THEN
                    DISPLAY "Ce nom latin de plante existe déjà."
@@ -2179,7 +2256,10 @@ STOP RUN.
                    PERFORM check_unique_plante_latin_name
                END-IF
            END-PERFORM
-         END-IF
+
+           IF wExitFunction = 0 THEN
+               MOVE wPlanteLatinName TO pl_nomLatin
+           END-IF
        END-IF
        
        MOVE 0 TO wActionChosen
@@ -2195,12 +2275,12 @@ STOP RUN.
            ACCEPT wActionChosen
        END-PERFORM
        
-        IF wActionChosen = 1 THEN
+       IF wActionChosen = 1 THEN
            DISPLAY "Entrez le nouvel habitat :"
            ACCEPT pl_habitat
        END-IF
         
-        MOVE 0 TO wActionChosen
+       MOVE 0 TO wActionChosen
        PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
                                  AND wActionChosen < 2
            
@@ -2256,22 +2336,23 @@ STOP RUN.
                DISPLAY "Feuille/Fleur (attention à la majuscule)"
                ACCEPT pl_type
            END-PERFORM
-       END-IF
-       
-       MOVE wPlanteName TO pl_nom
-       MOVE wPlanteLatinName TO pl_nomLatin.
+       END-IF.
        
        delete_plante.
 *> Permet de supprimer une plante dans le fichier plante
 *> 
 *> Variables utilisées :
-*> - wSelectedPlantId
+*> - wSelectedPlanteId
 *> - wEndOfFile
-*> - wNoPlante          
-       OPEN I-O fhpl
+*> - wNoPlante
+*>
+*> Nombre de lectures : le nombre de fois que la plante était contenue
+*> dans un herbier, +1
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wNoPlante
        MOVE wSelectedPlanteId TO fhpl_idPlante
+
+       OPEN I-O fhpl
        START fhpl, KEY IS = fhpl_idPlante
        INVALID KEY     MOVE 1 TO wNoPlante
        NOT INVALID KEY
@@ -2297,19 +2378,94 @@ STOP RUN.
            DISPLAY "Cette plante n'existe pas"
            MOVE 1 TO wNoPlante
        NOT INVALID KEY 
-      *>     ADD -1 TO wLastPlantId
            DELETE fplan RECORD
        END-READ
        CLOSE fplan.
-       
-       display_admin_plante_menu.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+
+       display_plantes_menu.
+*> Affiche le menu de consultation des plantes. Ce menu permet d'effec-
+*> tuer les opérations de création et de mise à jour si l'utilisateur
+*> connecté n'est pas anonyme, et dans tous les cas permet de consulter
+*> les statistiques d'une plante
 *>
 *> Variables utilisées :
 *> - wActionChosen
 *> - wIsAnonymous
-*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM display_plantes_type
+       PERFORM WITH TEST AFTER UNTIL
+                           wActionChosen >= 0 AND 
+                           (
+                               wActionChosen <= 1 AND
+                               wIsAnonymous = 1
+                           ) OR
+                           (
+                               wActionChosen <= 3 AND
+                               wIsAnonymous = 0
+                           )
+           
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF 
+               wActionChosen < 0 OR
+               (
+                   wActionChosen > 1 AND
+                   wIsAnonymous = 1
+               ) OR
+               (
+                   wActionChosen > 3 AND
+                   wIsAnonymous = 0
+               )
+           THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+		
+           DISPLAY "        1 : consulter les statistiques d'une plante"
+
+           IF NOT wIsAnonymous = 1 THEN
+               DISPLAY "        2 : créer une nouvelle plante"
+               DISPLAY "        3 : modifier une plante"
+           END-IF
+           
+           DISPLAY " "
+           DISPLAY "        0 : retourner au menu"
+           DISPLAY " "
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 1
+          *> Consulter les stats d'une plante
+           PERFORM display_plante_stats_menu
+           PERFORM display_plantes_menu
+       WHEN 2
+          *> Créer une nouvelle plante
+           PERFORM add_plante
+           PERFORM display_plantes_menu
+       WHEN 3
+          *> Modifier une plante existante
+           PERFORM display_update_plante
+           PERFORM display_plantes_menu
+       END-EVALUATE.
+
+       display_admin_plante_menu.
+*> Affiche le menu correspondant aux herbiers. Cette fonction doit être
+*> appelée lorsqu'un administrateur est connecté et veux consulter tous
+*> les herbiers.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wIsAnonymous
 *>
 *> Nombre de lectures : aucune
        MOVE 0 TO wActionChosen
@@ -2326,98 +2482,96 @@ STOP RUN.
 
            
            IF wIsAnonymous = 0 THEN
-             DISPLAY CONST_ACTION_SENTENCE
-             DISPLAY " "
+               DISPLAY CONST_ACTION_SENTENCE
+               DISPLAY " "
 		
-             DISPLAY "        1 : consulter les plantes"
-             DISPLAY "        2 : supprimer une plante"
-             DISPLAY "        3 : ajouter une plante"
-             DISPLAY "        4 : modifier les informations d'une plante"
-             DISPLAY "        5 : consulter statistique"
+               DISPLAY "        1 : consulter les plantes"
+               DISPLAY "        2 : supprimer une plante"
+               DISPLAY "        3 : ajouter une plante"
+               DISPLAY "        4 : modifier les informations d'une ",
+                       "plante"
+               DISPLAY "        5 : consulter les statistiques d'une ",
+                       "plante"
            
-             DISPLAY " "
-             DISPLAY "        0 : retourner au menu"
-             DISPLAY " "
+               DISPLAY " "
+               DISPLAY "        0 : retourner au menu"
+               DISPLAY " "
            ELSE
-             PERFORM display_global_menu
+               EXIT
            END-IF
            ACCEPT wActionChosen
+
            DISPLAY " "
        END-PERFORM
 
        EVALUATE wActionChosen
-       WHEN 0
-*> retour au menu global
-          PERFORM display_global_menu
        WHEN 1
- *> consulter les plantes
-         PERFORM display_plantes
-         PERFORM display_herbier_menu
+          *> consulter les plantes
+           PERFORM display_plantes
+           PERFORM display_admin_plante_menu
        WHEN 2
- *> supprimer une plante
+          *> supprimer une plante
            PERFORM display_delete_plante
-           PERFORM display_herbier_menu
+           PERFORM display_admin_plante_menu
        WHEN 3
- *> ajouter une plante
+          *> ajouter une plante
            PERFORM add_plante
-           PERFORM display_herbier_menu
+           PERFORM display_admin_plante_menu
        WHEN 4
- *> gérer une plante
+          *> gérer une plante
            PERFORM display_update_plante
-           PERFORM display_herbier_menu
+           PERFORM display_admin_plante_menu
        WHEN 5
- *> consulter statistique
-           PERFORM display_plante_stats
-           PERFORM display_herbier_menu
+          *> consulter statistique
+           PERFORM display_plante_stats_menu
+           PERFORM display_admin_plante_menu
        END-EVALUATE.
        
        display_update_plante.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*> Affiche le menu de choix de la plante à modifier.
 *>
 *> Variables utilisées :
-*> - wActionChosen
-*> - wIsAnonymous
-*> - wConnectedUserRole
+*> - wSelectedPlanteId
+*> - wPlantExists
 *>
 *> Nombre de lectures : aucune
-       PERFORM display_plantes
-       IF wLastPlantId = 0 THEN
-       
-          PERFORM WITH TEST AFTER UNTIL wSelectedPlanteId > 0 AND
-          wSelectedPlanteId <= wLastPlantId
-                                 
-           DISPLAY "Quel identifiant de plante souhaitez vous modifier"
+       MOVE 0 TO wSelectedPlanteId
+       MOVE 1 TO wPlantExists
+
+       PERFORM WITH TEST AFTER UNTIL wPlantExists = 1
+           IF wPlantExists = 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE, " Aucune plante avec ",
+                       "cet identifiant n'a pu être trouvée."
+           END-IF
+
+           DISPLAY "Entrez l'identifiant de la plante que vous ",
+                   "souhaitez modifier"
            ACCEPT wSelectedPlanteId
-          END-PERFORM
-          DISPLAY " "
-          PERFORM update_plante
-       END-IF.
+
+           PERFORM check_plant_exists
+       END-PERFORM
+
+       DISPLAY " "
+       PERFORM update_plante.
        
        display_delete_plante.
-*> Affiche le menu correspondant aux herbiers. Cette fonction s'éxécute
-*> lorsqu'un utilisateur est connecté et veux consulter ses herbiers.
+*> Affiche un menu permettant de sélectionner la plante à supprimer.
 *>
 *> Variables utilisées :
-*> - wActionChosen
-*> - wIsAnonymous
-*> - wConnectedUserRole
+*> - wSelectedPlanteId
+*> - wPlantExists
 *>
 *> Nombre de lectures : aucune
        PERFORM display_plantes
-       IF wLastPlantId = 0 THEN
-       
-          PERFORM WITH TEST AFTER UNTIL wSelectedPlanteId > 0 AND
-          wSelectedPlanteId <= wLastPlantId
-                                 
+       PERFORM WITH TEST AFTER UNTIL wPlantExists = 1    
            DISPLAY "Quel identifiant de plante souhaitez vous supprimer"
            ACCEPT wSelectedPlanteId
-          END-PERFORM
-          DISPLAY " "
-          PERFORM delete_plante
-       END-IF.
- 
- *> herbier_plante
+
+           PERFORM check_plant_exists
+       END-PERFORM
+
+       DISPLAY " "
+       PERFORM delete_plante.
        
        add_herbier_plante.
 *> Permet d'ajouter une plante dans un herbier avec herbier_plante
@@ -2426,50 +2580,56 @@ STOP RUN.
 *> - wSelectedHerbierId
 *> - wSelectedHerbierType
 *> - wLastHerbierPlantId
+*> - wInsertionPlante
+*> - wTypePlante
+*> - wSelectedPlanteId
 *>
-       IF wSelectedHerbierType = CONST_HERBIER_LEAF 
-        OR wSelectedHerbierType = CONST_HERBIER_FLOWER THEN
-         MOVE wSelectedHerbierType TO wTypePlante
-         PERFORM display_plantes_type
+*> Nombre de lectures : aucune
+       IF wSelectedHerbierType = CONST_HERBIER_LEAF OR
+          wSelectedHerbierType = CONST_HERBIER_FLOWER
+       THEN
+           MOVE wSelectedHerbierType TO wTypePlante
+           PERFORM display_plantes_type
        ELSE
-         PERFORM display_plantes
+           PERFORM display_plantes
        END-IF
        
        PERFORM WITH TEST AFTER UNTIL wInsertionPlante = 1
            DISPLAY "Veuillez saisir l'identifiant de la plante que", 
-           "que vous souhaitez ajouter à l'herbier :"
+           "que vous souhaitez ajouter à l'herbier"
            ACCEPT wSelectedPlanteId
            IF wSelectedHerbierType = CONST_HERBIER_LEAF OR 
-            wSelectedHerbierType = CONST_HERBIER_FLOWER THEN
+              wSelectedHerbierType = CONST_HERBIER_FLOWER
+           THEN
                PERFORM check_plante_right_type
            END-IF
            
            IF wSelectedHerbierType = CONST_HERBIER_MIXTE THEN
-            MOVE 1 TO wInsertionPlante
+               MOVE 1 TO wInsertionPlante
            END-IF
        END-PERFORM
 
        
-           DISPLAY "Quelle est la date de séchage de cueillette de",
-                   "la plante ? (format jj/mm/aaaa)"
-           ACCEPT fhpl_date
+       DISPLAY "Quelle est la date de cueillette de la plante ? ",
+               "(format jj/mm/aaaa)"
+       ACCEPT fhpl_date
            
-           DISPLAY "Quelle est la taille de la plante ceuillie",
-                   "en centimètre ?"
-           ACCEPT fhpl_taille
+       DISPLAY "Quelle est la taille en centimètres de la plante ",
+               "ceuillie ?"
+       ACCEPT fhpl_taille
            
-           DISPLAY "Quelle est le lieu où la plante a été ceuillie ?"
-           ACCEPT fhpl_lieu
+       DISPLAY "Quel est le nom du lieu où la plante a été ceuillie ?"
+       ACCEPT fhpl_lieu
 
-           ADD 1 TO wLastHerbierPlantId
-           MOVE wLastHerbierPlantId TO fhpl_id
-           MOVE wSelectedHerbierId TO fhpl_idHerbier
-           MOVE wSelectedPlanteId TO fhpl_idPlante
+       ADD 1 TO wLastHerbierPlantId
+       MOVE wLastHerbierPlantId TO fhpl_id
+       MOVE wSelectedHerbierId TO fhpl_idHerbier
+       MOVE wSelectedPlanteId TO fhpl_idPlante
 
-           OPEN I-O fhpl
-           WRITE tamp_fhpl
-           END-WRITE
-           CLOSE fhpl.
+       OPEN I-O fhpl
+       WRITE tamp_fhpl
+       END-WRITE
+       CLOSE fhpl.
        
        check_plante_right_type.
 *> Vérifie que le type de la plante dans wSelectedPlanteId correspond au
@@ -2480,6 +2640,8 @@ STOP RUN.
 *> - wSelectedPlanteId
 *> - wSelectedHerbierType
 *> - wInsertionPlante
+*>
+*> Nombre de lectures : 1
        MOVE 0 TO wInsertionPlante
        MOVE wSelectedPlanteId TO pl_id
 
@@ -2488,25 +2650,26 @@ STOP RUN.
        KEY IS pl_id
            INVALID KEY     MOVE 0 TO wInsertionPlante
            NOT INVALID KEY 
-             IF pl_type = wSelectedHerbierType THEN
-              MOVE 1 TO wInsertionPlante
-             END-IF
+               IF pl_type = wSelectedHerbierType THEN
+                   MOVE 1 TO wInsertionPlante
+               END-IF
        END-READ
        CLOSE fplan.
        
        last_herbier_plante_id.
 *> Parcourt le fichier herbier_plante à la recherche du plus grand id. 
-*> Une foistrouvé, on le stocke dans wLastHerbierPlantId
+*> Une fois trouvé, on le stocke dans wLastHerbierPlantId
 *>
 *> Variables utilisées :
 *> - wLastHerbierPlantId
 *> - wEndOfFile
 *>
-*> Nombre de lectures : autant qu'il y a de plantes dans le fichier
-*> plante.
-       OPEN INPUT fhpl
+*> Nombre de lectures : autant qu'il y a de plantes dans chaque herbier
+*> cumulés
        MOVE 0 TO wEndOfFile
        MOVE 0 TO wLastHerbierPlantId
+       
+       OPEN INPUT fhpl
        PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
            READ fhpl
            AT END MOVE 1 TO wEndOfFile
@@ -2517,32 +2680,61 @@ STOP RUN.
            END-READ
        END-PERFORM
        CLOSE fhpl.
+
+       display_plante_herbier_table_header.
+*> Affiche l'en-tête de la table pour afficher les plantes d'un herbier
+*>
+*> Variables utilisées : aucune
+*> Nombre de lectures : aucune
+       DISPLAY "ID  | Nom de la plante               | Type de plante ",
+               " | Date de ceuillette | Taille | Lieu de ceuillette"
+       DISPLAY "----|--------------------------------|----------------",
+               "-|--------------------|--------|----------------------",
+               "-------------------".
+       
+       display_plante_herbier_table_line.
+*> Affiche l'entité plante herbier actuellement dans le tampon sous
+*> forme de table.
+*> ⚠️ La jointure avec la plante correspondante y est faite ! Il est
+*> donc important que le fichier plantes ne soit pas ouvert avant de
+*> l'appeler !
+*>
+*> Variables utilisées : aucune
+*> Nombre de lectures : 1
+       MOVE fhpl_idPlante TO pl_id
+
+       OPEN INPUT fplan
+       READ fplan
+       END-READ
+       CLOSE fplan
+       
+       DISPLAY fhpl_id, " | ", pl_nom, " | ", pl_type, " | ", 
+               fhpl_date, "    |  ", fhpl_taille, " | ", fhpl_lieu.
        
        display_herbier_plantes.
-*> Affiche sous la forme d'une table les plantes contenue dans un 
+*> Affiche sous la forme d'une table les plantes contenues dans un 
 *> herbier.
 *>
 *> Variables utilisées :
 *> - wNoHerbierPlante
 *>
-*> Nombre de lectures : Autant qu'il y a de plantes dans l'appli
-       MOVE 0 TO wNoHerbierPlante
+*> Nombre de lectures : Autant qu'il y a de plantes dans l'herbier
        MOVE wSelectedHerbierId TO fhpl_idHerbier
        
        OPEN INPUT fhpl
        START fhpl, KEY IS = fhpl_idHerbier
        INVALID KEY
            DISPLAY "Aucune plante pour l'herbier cherché"
-           MOVE 0 TO wNoHerbierPlante
+           MOVE 1 TO wNoHerbierPlante
        NOT INVALID KEY
-       	   MOVE 1 TO wNoHerbierPlante
-           PERFORM display_plantes_table_header
+       	   MOVE 0 TO wNoHerbierPlante
+           PERFORM display_plante_herbier_table_header
            PERFORM WITH TEST AFTER UNTIL wEndOfFile = 1
                READ fhpl NEXT
                AT END      MOVE 1 TO wEndOfFile
                NOT AT END
                    IF wSelectedHerbierId = fhpl_idHerbier THEN
-                       PERFORM display_plantes_table_line
+                       PERFORM display_plante_herbier_table_line
                    ELSE
                        MOVE 1 TO wEndOfFile
                    END-IF
@@ -2551,13 +2743,42 @@ STOP RUN.
        END-START
        CLOSE fhpl.
 
+       display_plante_stats_menu.
+*> Petit menu qui permet de choisir la plante dont l'utilisateur sou-
+*> haite consulter les statistiques.
+*>
+*> Variables utilisées :
+*> - wSelectedPlanteId
+*> - wPlantExists
+*>
+*> Nombre de lectures : 1
+       MOVE 0 TO wSelectedPlanteId
+       MOVE 1 TO wPlantExists
+
+       PERFORM WITH TEST AFTER UNTIL wPlantExists = 1
+           IF wPlantExists = 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE, " Aucune plante avec ",
+                       "cet identifiant n'a pu être trouvée."
+           END-IF
+
+           DISPLAY "Entrez l'identifiant de la plante dont vous ",
+                   "souhaitez consulter les statistiques"
+           ACCEPT wSelectedPlanteId
+
+           PERFORM check_plant_exists
+       END-PERFORM
+
+       DISPLAY " "
+       PERFORM display_plante_stats.
+
+
        display_plante_stats.
 *> Cette fonction permet d'afficher, pour la plante courante (dont l'id
-*> est contenu dans wCurrentPlantId), le nombre d'herbiers dans lesquels
+*> est contenu dans wSelectedPlanteId), le nombre d'herbiers dans lesquels
 *> elle apparaît ainsi que leur nom, et son nombre total de précences.
 *>
 *> Variables utilisées :
-*> - wCurrentPlantId
+*> - wSelectedPlanteId
 *> - wEndOfFile
 *> - wEndOfZone
 *> - wPlantCount
@@ -2596,7 +2817,7 @@ STOP RUN.
                        AT END      MOVE 1 TO wEndOfZone
                        NOT AT END
                            IF fhpl_idHerbier = fh_id
-                               IF fhpl_idPlante = wCurrentPlantId THEN
+                               IF fhpl_idPlante = wSelectedPlanteId THEN
                                    ADD 1 TO wPlantCount
                                END-IF
                            ELSE
@@ -2624,7 +2845,8 @@ STOP RUN.
 *> wAvgHerbierByUser le résultat du rapport du premier sur le second.
 *>
 *> Variables utilisées :
-*> - wEndOfFile
+*> - wHerbierCount
+*> - wUtilisateursCount
 *> - wAvgHerbierByUser
 *>
 *> Nombre de lectures : Aucune, on charge en mémoire le nombre d'herb-
@@ -2652,56 +2874,378 @@ STOP RUN.
 *> herbier_plante.
 *> 
 *> Variables utilisées :
-*> - l_h_id          
+*> - wNoHerbierPlante
+*> - wDeletePlante
+*> - wSelectedPlanteHerbierId
+*>
+*> Nombre de lectures : 1
        PERFORM display_herbier_plantes
        
-       IF wNoHerbierPlante = 1 THEN 
-       	PERFORM WITH TEST AFTER UNTIL wDeletePlante = 1
-           DISPLAY "Veuillez saisir l'identifiant de la plante que", 
-           "que vous souhaitez supprimer de l'herbier :"
-           ACCEPT wSelectedPlanteId
-           PERFORM check_plant_in_herbier
-        END-PERFORM
+       IF wNoHerbierPlante = 0 THEN 
+       	   PERFORM WITH TEST AFTER UNTIL wDeletePlante = 1
+               DISPLAY "Veuillez saisir l'identifiant de la plante que", 
+                       " vous souhaitez supprimer de l'herbier :"
+               ACCEPT wSelectedPlanteHerbierId
+               PERFORM check_plant_herbier_in_herbier
+           END-PERFORM
         
-        OPEN I-O fhpl
-        MOVE 0 TO wNoPlante
-        MOVE wDeletePlanteId TO fhpl_id
-        READ fhpl
-        INVALID KEY 
-           DISPLAY "Cette plante n'existe pas dans cet herbier"
-           MOVE 1 TO wNoPlante
-        NOT INVALID KEY 
-           ADD -1 TO wLastHerbierPlantId
-           DELETE fhpl RECORD
-        END-READ
-        CLOSE fhpl
+           MOVE wSelectedPlanteHerbierId TO fhpl_id
+
+           OPEN I-O fhpl
+           READ fhpl
+           NOT INVALID KEY 
+               DELETE fhpl RECORD
+           END-READ
+           CLOSE fhpl
        END-IF.
        
-       check_plant_in_herbier.
-*> Vérifie que la plante dans wSelectedPlanteId est une plante dans 
+       check_plant_herbier_in_herbier.
+*> Vérifie que la plante dans wSelectedPlanteHerbierId est une plante 
 *> dans l'herbier.
 *> Le résultat est stocké dans wDeletePlante
 *>
 *> Variables utilisées :
-*> - wSelectedPlanteId
+*> - wSelectedPlanteHerbierId
 *> - wSelectedHerbierId
 *> - wDeletePlante
-       MOVE 0 TO wInsertionPlante
-       MOVE wSelectedHerbierId TO fhpl_idHerbier
-
+*>
+*> Nombre de lectures : 1
+       MOVE wSelectedPlanteHerbierId TO fhpl_id
+       
        OPEN INPUT fhpl
        READ fhpl
-       KEY IS fhpl_idHerbier
-           INVALID KEY     MOVE 0 TO wDeletePlante
-           NOT INVALID KEY 
-             IF fhpl_idPlante = wSelectedPlanteId THEN
-              MOVE 1 TO wDeletePlante
-              MOVE fhpl_id TO wDeletePlanteId
-             END-IF
+       INVALID KEY         MOVE 0 TO wDeletePlante
+       NOT INVALID KEY
+           IF fhpl_idHerbier = wSelectedHerbierId THEN
+               MOVE 1 TO wDeletePlante
+           ELSE
+               MOVE 0 TO wDeletePlante
+           END-IF
        END-READ
        CLOSE fhpl.
+       
+       display_global_menu.
+*> Affiche le menu général de l'application. Cette fonction s'éxécute
+*> à l'ouverture de l'application.
+*> Pour faciliter la gestion des droits et limiter les responsabilités
+*> de chaque fonction, l'affichage du menu principal a été séparé en
+*> trois sous-fonctions, dépendant du type de l'utilisateur. Certaines
+*> parties de code étant communes, elles ont été regroupées dans
+*> d'autres fonctions pour éviter les duplications de code.
+*>
+*> Variables utilisées :
+*> - wConnectedUserRole
+*>
+*> Nombre de lectures : aucune
+       IF NOT wExitProgramme = 1 THEN
+           EVALUATE wConnectedUserRole
+           WHEN CONST_ROLE_READER
+               PERFORM display_anonymous_global_menu
+           WHEN CONST_ROLE_EDITOR
+               PERFORM display_editor_global_menu
+           WHEN CONST_ROLE_ADMIN
+               PERFORM display_admin_global_menu
+           END-EVALUATE
+       END-IF.
+
+       display_anonymous_global_menu.
+*> Affiche le menu global pour les utilisateurs de type Anonyme.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wTypePlante
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen <= 5
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 5 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+
+           PERFORM display_standard_global_menu_options
+          *> Options spécifiques aux utilisateurs anonymes
+           DISPLAY "        4 : créer un compte"
+           DISPLAY "        5 : se connecter"
+
+           PERFORM display_exit_option
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+          *> Sortie du logiciel
+           EXIT
+       WHEN 1
+          *> Consultation des herbiers
+           PERFORM display_herbier_menu
+           PERFORM display_global_menu
+       WHEN 2
+          *> Consultation des plantes de type feuille
+           MOVE CONST_PLANT_LEAF TO wTypePlante
+          *> PERFORM display_plantes_type
+           PERFORM display_plantes_menu
+           PERFORM display_global_menu
+       WHEN 3
+          *> Consultation des plantes de type fleur
+           MOVE CONST_PLANT_LEAF TO wTypePlante
+          *> PERFORM display_plantes_type
+           PERFORM display_plantes_menu
+           PERFORM display_global_menu
+       WHEN 4
+          *> Création d'un compte
+           PERFORM sign_in
+           PERFORM display_global_menu
+       WHEN 5
+          *> Connexion
+           PERFORM login
+           PERFORM display_global_menu
+       END-EVALUATE.
+
+       display_editor_global_menu.
+*> Affiche le menu global pour les utilisateurs de type Editeur.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wTypePlante
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen <= 6
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 6 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+
+           PERFORM display_standard_global_menu_options
+           PERFORM display_connected_users_global_menu_options
+
+           PERFORM display_exit_option
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+          *> Sortie du logiciel
+           EXIT
+       WHEN 1
+          *> Consultation des herbiers
+           PERFORM display_herbier_menu
+           PERFORM display_global_menu
+       WHEN 2
+          *> Consultation des plantes de type feuille
+           MOVE CONST_PLANT_LEAF TO wTypePlante
+          *> PERFORM display_plantes_type
+           PERFORM display_plantes_menu
+           PERFORM display_global_menu
+       WHEN 3
+          *> Consultation des plantes de type fleur
+           MOVE CONST_PLANT_LEAF TO wTypePlante
+          *> PERFORM display_plantes_type
+           PERFORM display_plantes_menu
+           PERFORM display_global_menu
+       WHEN 4
+          *> Gérer ses herbiers
+           PERFORM display_herbier_gesture_menu
+           PERFORM display_global_menu
+       WHEN 5
+          *> Gestion de ses informations
+           PERFORM display_account_menu
+           PERFORM display_global_menu
+       WHEN 6
+          *> Déconnexion
+           PERFORM log_out
+           PERFORM display_global_menu
+       END-EVALUATE.
+
+       display_admin_global_menu.
+*> Affiche le menu global pour les utilisateurs de type Editeur.
+*>
+*> Variables utilisées :
+*> - wActionChosen
+*> - wTypePlante
+*>
+*> Nombre de lectures : aucune
+       MOVE 0 TO wActionChosen
+
+       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
+                                 AND wActionChosen <= 10
+           DISPLAY " "
+           DISPLAY CONST_DISPLAY_MENU
+           DISPLAY " "
+
+           IF wActionChosen > 10 OR wActionChosen < 0 THEN
+               DISPLAY CONST_ACTION_IMPOSSIBLE
+           END-IF
+
+           DISPLAY CONST_ACTION_SENTENCE
+           DISPLAY " "
+
+           PERFORM display_standard_global_menu_options
+           PERFORM display_connected_users_global_menu_options
+          *> Options spécifiques aux utilisateurs administrateurs
+           DISPLAY "        7 : gérer les herbiers"
+           DISPLAY "        8 : gérer les plantes"
+           DISPLAY "        9 : gérer les utilisateurs"
+           DISPLAY " "
+           DISPLAY "       10 : utiliser la fonction distanciel"
+
+           PERFORM display_exit_option
+
+           ACCEPT wActionChosen
+           DISPLAY " "
+       END-PERFORM
+
+       EVALUATE wActionChosen
+       WHEN 0
+          *> Sortie du logiciel
+           EXIT
+       WHEN 1
+          *> Consultation des herbiers
+           PERFORM display_herbier_menu
+           PERFORM display_global_menu
+       WHEN 2
+          *> Consultation des plantes de type feuille
+           MOVE CONST_PLANT_LEAF TO wTypePlante
+          *> PERFORM display_plantes_type
+           PERFORM display_plantes_menu
+           PERFORM display_global_menu
+       WHEN 3
+          *> Consultation des plantes de type fleur
+           MOVE CONST_PLANT_LEAF TO wTypePlante
+          *> PERFORM display_plantes_type
+           PERFORM display_plantes_menu
+           PERFORM display_global_menu
+       WHEN 4
+          *> Gérer ses herbiers
+           PERFORM display_herbier_gesture_menu
+           PERFORM display_global_menu
+       WHEN 5
+          *> Gestion de ses informations
+           PERFORM display_account_menu
+           PERFORM display_global_menu
+       WHEN 6
+          *> Déconnexion
+           PERFORM log_out
+           PERFORM display_global_menu
+       WHEN 7
+          *> Gestion des herbiers (en tant qu'admin)
+           PERFORM display_admin_herbier_menu
+           PERFORM display_global_menu
+       WHEN 8
+          *> Gestion des plantes (en tant qu'admin)
+           PERFORM display_admin_plante_menu
+           PERFORM display_global_menu
+       WHEN 9
+          *> Gestion des utilisateurs (en tant qu'admin)
+           PERFORM display_admin_user_menu
+           PERFORM display_global_menu
+       WHEN 10
+          *> Fonction distanciel
+           PERFORM dist_menu
+           PERFORM display_global_menu
+       END-EVALUATE.
+
+       display_standard_global_menu_options.
+*> Affiche les options standard du menu global. Ces options sont dispo-
+*> nibles pour tous à tout instant.
+*>
+*> Variables utilisées : aucune
+*> Nombre de lectures : aucune
+       DISPLAY "        1 : consulter les herbiers"
+       DISPLAY "        2 : consulter les feuilles"
+       DISPLAY "        3 : consulter les fleurs".
+
+       display_connected_users_global_menu_options.
+*> Affiche les options pour les utilisateurs connectés du menu global.
+*>
+*> Variables utilisées : aucune
+*> Nombre de lectures : aucune
+       DISPLAY "        4 : gérer ses herbiers"
+       DISPLAY "        5 : gérer ses informations"
+       DISPLAY "        6 : se déconnecter".
+
+       display_exit_option.
+*> Affiche la dernière option d'un menu (0) pour retour en arrière.
+*>
+*> Variables utilisées : aucune
+*> Nombre de lectures : aucune
+       DISPLAY " "
+       DISPLAY "        0 : quitter l'application"
+       DISPLAY " ".
 
 *> FONCTION DISTANCIEL :
+       dist_menu.
+*> Affiche un menu permettant de rentrer les données nécessaires à l'ap-
+*> pel de la fonction distanciel.
+*> 
+*> Variables utilisées :
+*> - wDistUserType
+*> - wDistMonth
+*> - wDistPlace
+*>
+*> Nombre de lectures : aucune
+       MOVE " " TO wDistUserType
+       MOVE " " TO wDistMonth
+       MOVE " " TO wDistPlace
+
+       DISPLAY "Le but de cette fonction est d'afficher le nom des ",
+               "herbiers créés à un mois donné et appartenant à un ",
+               "type d'utilisateurs donné qui contiennent au moins une",
+               " plante ceuillie à un lieu donné"
+       
+       DISPLAY " "
+       PERFORM WITH TEST AFTER UNTIL wDistMonth = "01"
+                                  OR wDistMonth = "02"
+                                  OR wDistMonth = "03"
+                                  OR wDistMonth = "04"
+                                  OR wDistMonth = "05"
+                                  OR wDistMonth = "06"
+                                  OR wDistMonth = "07"
+                                  OR wDistMonth = "08"
+                                  OR wDistMonth = "09"
+                                  OR wDistMonth = "10"
+                                  OR wDistMonth = "11"
+                                  OR wDistMonth = "12"
+           DISPLAY "Entrez le mois de création des herbiers (format mm)"
+           ACCEPT wDistMonth
+       END-PERFORM
+       
+       DISPLAY " "
+       PERFORM WITH TEST AFTER UNTIL wDistUserType = CONST_USER_AMATEUR
+                                  OR wDistUserType = CONST_USER_PRO
+           DISPLAY "Entrez le type d'utilisateurs auquel les herbiers ",
+                   "dervaient appartenir (", CONST_USER_AMATEUR,
+                   CONST_USER_PRO, ")"
+           ACCEPT wDistUserType
+       END-PERFORM
+
+       DISPLAY " "
+       DISPLAY "Entrez le lieu de ceuillete"
+       ACCEPT wDistPlace
+
+       PERFORM herbier_name_from_month_and_user_type_with_plant_origin.
+
        herbier_name_from_month_and_user_type_with_plant_origin.
 *> Pour un type d'utilisateur stocké dans wDistUserType, affiche le nom
 *> des herbiers créés à un mois contenu dans wDistMonth avec au moins
@@ -2755,119 +3299,3 @@ STOP RUN.
            END-PERFORM
        END-START
        CLOSE fhpl.
-       
-       display_global_menu.
-*> Affiche le menu général de l'application. Cette fonction s'éxécute
-*> à l'ouverture de l'application.
-*>
-*> Variables utilisées :
-*> - wActionChosen
-*> - wIsAnonymous
-*> - wConnectedUserRole
-*>
-*> Nombre de lectures : aucune
-       MOVE 0 TO wActionChosen
-
-       PERFORM WITH TEST AFTER UNTIL wActionChosen >= 0
-                                 AND wActionChosen < 9
-           DISPLAY " "
-           DISPLAY CONST_DISPLAY_MENU
-           DISPLAY " "
-
-           IF wActionChosen > 8 OR wActionChosen < 0 THEN
-               DISPLAY CONST_ACTION_IMPOSSIBLE
-           END-IF
-
-           DISPLAY CONST_ACTION_SENTENCE
-           DISPLAY " "
-
-           DISPLAY "        1 : consulter les herbiers"
-           DISPLAY "        2 : consulter les feuilles"
-           DISPLAY "        3 : consulter les fleurs"
-           IF wIsAnonymous = 1 THEN
-             DISPLAY "        4 : créer un compte"
-             DISPLAY "        5 : se connecter"
-           ElSE
-              DISPLAY "        4 : gérer ses herbiers"
-              DISPLAY "        5 : gérer ses informations"
-              DISPLAY "        6 : se déconnecter"
-              IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
-                DISPLAY "--Fonctionnalités administrateur--"
-                DISPLAY "        7 : gérer les herbiers"
-                DISPLAY "        8 : gérer les plantes"
-                DISPLAY "        9 : gérer les utilisateurs"
-             END-IF
-           END-IF
-           DISPLAY " "
-           DISPLAY "        0 : quitter l'application"
-           DISPLAY " "
-
-           ACCEPT wActionChosen
-           DISPLAY " "
-       END-PERFORM
-
-       EVALUATE wActionChosen
-       WHEN 0
- *> retour à la page d'accueil
-          exit
-       WHEN 1
- *> consulter les herbiers
-         PERFORM display_all_herbier
-         PERFORM display_global_menu
-       WHEN 2
- *> consulter les feuilles
-           MOVE CONST_PLANT_LEAF TO wTypePlante
-           PERFORM display_plantes_type
-           PERFORM display_global_menu
-       WHEN 3
- *> consulter les fleurs
-           MOVE CONST_PLANT_FLOWER TO wTypePlante
-           PERFORM display_plantes_type
-           PERFORM display_global_menu
-       WHEN 4
- *> créer un compte / gérer ses herbiers
-           IF wIsAnonymous = 1 THEN
-              PERFORM sign_in
-           ELSE
-              PERFORM display_herbier_menu
-           END-IF
-           PERFORM display_global_menu
-       WHEN 5
- *> se connecter / gérer ses informations
-           IF wIsAnonymous = 1 THEN
-              PERFORM login
-           ELSE
-              PERFORM display_account_menu
-           END-IF
-           PERFORM display_global_menu
-       WHEN 6
- *> se déconnecter
-           IF wIsAnonymous = 0 THEN
-              PERFORM log_out
-           END-IF
-           PERFORM display_global_menu
-       WHEN 7
- *> gérer les herbiers
-           IF wIsAnonymous = 0 THEN
-              IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
-                PERFORM display_admin_herbier_menu
-              END-IF
-           END-IF
-           PERFORM display_global_menu
-       WHEN 8
- *> gérer les plantes
-           IF wIsAnonymous = 0 THEN
-              IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
-                PERFORM display_admin_plante_menu
-              END-IF
-           END-IF
-           PERFORM display_global_menu
-       WHEN 9
- *> gérer les utilisateurs
-           IF wIsAnonymous = 0 THEN
-              IF wConnectedUserRole = CONST_ROLE_ADMIN THEN
-                PERFORM display_admin_user_menu
-              END-IF
-           END-IF
-           PERFORM display_global_menu
-       END-EVALUATE.
